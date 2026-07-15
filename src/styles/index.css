@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+
+/* Design tokens (Tailwind v4 CSS-first theme). */
+@theme {
+  --color-brand-50: #eef6ff;
+  --color-brand-100: #d8ebff;
+  --color-brand-500: #1d82d8;
+  --color-brand-600: #0967b3;
+  --color-brand-700: #07538f;
+  --color-brand-900: #0a2540;
+  --color-mint-50: #ecfdf5;
+  --color-mint-500: #10b981;
+  --color-mint-600: #059669;
+  --color-graphite-950: #111827;
+  --color-ink: #0f172a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-[#eef2f6] text-slate-900 antialiased;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+::selection {
+  @apply bg-brand-100 text-brand-900;
+}
+
+.app-surface {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(29, 130, 216, 0.12), transparent 24rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f6 38%, #e8edf3 100%);
+}
+
+.glass-panel {
+  @apply border border-white/70 bg-white/85 shadow-sm backdrop-blur;
+}
+
+/* Larger default tap targets for guard tablets/phones. */
+@media (pointer: coarse) {
+  button,
+  [role='button'],
+  a.btn {
+    min-height: 44px;
+  }
+}
