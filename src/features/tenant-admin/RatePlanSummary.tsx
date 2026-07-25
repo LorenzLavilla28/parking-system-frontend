@@ -14,8 +14,7 @@ export function RatePlanSummary({ rules }: { rules: RateRulesForm }) {
       <p className="text-sm leading-6 text-slate-700">{describeRateRules(rules)}</p>
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <SummaryItem label="Free exit period" value={`${rules.entryGraceMinutes} min`} />
-        <SummaryItem label="After payment" value={rules.paidExitGraceMinutes === '' ? 'Not set' : `${rules.paidExitGraceMinutes} min`} />
-        <SummaryItem label="Daily max" value={formatOptionalMoney(rules.dailyMax, rules.currency)} />
+        <SummaryItem label="Exit grace after payment" value={`${rules.paidExitGraceMinutes} min`} />
         <SummaryItem label="Lost ticket" value={formatOptionalMoney(rules.lostTicketFee, rules.currency)} />
       </dl>
       <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
@@ -66,7 +65,6 @@ function calculateSampleCharge(rules: RateRulesForm, hours: number) {
     amount = rate.firstAmount + increments * rate.incrementAmount;
   }
 
-  if (rules.dailyMax !== '') return Math.min(amount, rules.dailyMax);
   return amount;
 }
 

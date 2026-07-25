@@ -9,9 +9,9 @@ interface View {
 }
 
 const views: Record<RealtimeStatus, View> = {
-  live: { label: 'Live', dot: 'bg-emerald-500', text: 'text-emerald-700', pulse: true },
+  live: { label: 'System online', dot: 'bg-emerald-500', text: 'text-emerald-700', pulse: true },
   reconnecting: { label: 'Reconnecting', dot: 'bg-amber-500', text: 'text-amber-700', pulse: true },
-  offline: { label: 'Offline', dot: 'bg-slate-400', text: 'text-slate-500', pulse: false },
+  offline: { label: 'System offline', dot: 'bg-slate-400', text: 'text-slate-500', pulse: false },
 };
 
 /** Small connection-status pill for realtime-enabled screens. */
@@ -21,7 +21,7 @@ export function LiveIndicator({ status, className }: { status: RealtimeStatus; c
     <span
       className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', view.text, className)}
       role="status"
-      aria-label={`Realtime ${view.label}`}
+      aria-label={view.label}
     >
       <span className="relative flex h-2 w-2">
         {view.pulse && (

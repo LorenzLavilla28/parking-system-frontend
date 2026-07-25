@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, Banknote, MapPin, Pencil, Plus, TimerReset } from 'lucide-react';
+import { Archive, Banknote, CheckCircle2, Info, MapPin, Pencil, Plus, RotateCcw, Search, TimerReset } from 'lucide-react';
 import { adminApi, type Location, type LocationInput, type RatePlan } from './api';
 import { slugify } from '@/lib/slug';
 import { Button } from '@/components/ui/Button';
@@ -19,98 +19,211 @@ const empty: LocationInput = {
   slug: '',
   address: '',
   timezone: 'Asia/Manila',
-  exitGraceMinutes: 15,
   allowCashPayment: true,
+  slotCapacity: 20,
 };
 
 export function LocationsPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Location | 'new' | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
 
-  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations() });
+  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations({ pageSize: 200 }) });
+  const locationQuota = useQuery({ queryKey: ['admin-location-quota'], queryFn: adminApi.getLocationQuota });
   const ratePlans = useQuery({ queryKey: ['admin-rate-plans', 'locations-page'], queryFn: () => adminApi.listRatePlans(undefined, { pageSize: 200 }) });
-  const planNames = useMemo(() => {
-    const names = new Map<string, string>();
-    for (const plan of ratePlans.data?.items ?? []) {
-      names.set(plan.id, plan.name);
-    }
-    return names;
-  }, [ratePlans.data?.items]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-locations'] });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['admin-locations'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin-location-quota'] });
+  };
   const archive = useMutation({ mutationFn: adminApi.archiveLocation, onSuccess: invalidate });
-  const activeCount = locations.data?.items.filter((location) => location.status === 'Active').length ?? 0;
-  const cashCount = locations.data?.items.filter((location) => location.allowCashPayment).length ?? 0;
+  const restore = useMutation({ mutationFn: adminApi.restoreLocation, onSuccess: invalidate });
+  const allLocations = locations.data?.items ?? [];
+  const activeCount = allLocations.filter((location) => location.status === 'Active').length;
+  const archivedCount = allLocations.filter((location) => location.status === 'Archived').length;
+  const activeCashCount = allLocations.filter((location) => location.status === 'Active' && location.allowCashPayment).length;
+  const canCreateLocation = locationQuota.data?.canCreateLocation ?? false;
+  const locationLimitMessage = locationQuota.data
+    ? locationQuota.data.maximumLocations === null
+      ? 'Additional locations require platform approval.'
+      : `${locationQuota.data.subscriptionPlan} includes up to ${locationQuota.data.maximumLocations} active location${locationQuota.data.maximumLocations === 1 ? '' : 's'}.`
+    : locationQuota.isError
+      ? 'Location availability could not be verified. Please refresh and try again.'
+      : 'Checking your location allowance...';
+  const locationCtaLabel = locationQuota.isLoading
+    ? 'Checking allowance...'
+    : locationQuota.data?.maximumLocations === null
+      ? 'Contact platform admin'
+      : canCreateLocation
+        ? 'New location'
+        : 'Upgrade to add location';
+  const locationNotice = locationQuota.data
+    ? locationQuota.data.maximumLocations === null
+      ? locationLimitMessage
+      : `${locationLimitMessage} ${locationQuota.data.activeLocations} currently in use.`
+    : locationLimitMessage;
+  const filteredLocations = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return allLocations.filter((location) => {
+      const matchesStatus = statusFilter === 'all' || location.status.toLowerCase() === statusFilter;
+      const matchesSearch = !term || location.name.toLowerCase().includes(term) || location.slug.toLowerCase().includes(term);
+      return matchesStatus && matchesSearch;
+    });
+  }, [allLocations, search, statusFilter]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         eyebrow="Tenant administration"
         title="Parking locations"
-        description="Manage branches, public lookup slugs, guard exit grace, and cash-payment availability. Assign reusable rate plans to each location."
+        description="Keep locations ready for daily parking operations. Assign a rate plan before accepting vehicle entries."
+        className="p-4"
         actions={
-          <Button onClick={() => setEditing('new')}>
-            <Plus className="h-4 w-4" />
-            New location
-          </Button>
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <Button
+              onClick={() => setEditing('new')}
+              disabled={!canCreateLocation || locationQuota.isLoading || locationQuota.isError}
+              title={!canCreateLocation ? locationLimitMessage : undefined}
+            >
+              <Plus className="h-4 w-4" />
+              {locationCtaLabel}
+            </Button>
+            <div className={`flex max-w-xs items-start gap-1.5 rounded-md px-2 py-1 text-xs leading-4 ${canCreateLocation ? 'text-slate-500' : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'}`}>
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{locationNotice}</span>
+            </div>
+          </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard icon={MapPin} label="Total locations" value={locations.data?.items.length ?? '...'} detail="Configured branches" tone="blue" />
-        <MetricCard icon={TimerReset} label="Active locations" value={activeCount} detail="Available to guards" tone="green" />
-        <MetricCard icon={Banknote} label="Cash enabled" value={cashCount} detail="Locations accepting cash" tone="amber" />
+      {locations.data && allLocations.length > 0 && activeCount === 0 && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Archive className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">No active parking locations</p>
+            <p className="mt-0.5 text-amber-800">All configured locations are archived and unavailable to guards. Restore a location to resume operations.</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard icon={MapPin} iconSize="subtle" label="Configured locations" value={locations.data?.items.length ?? '...'} detail="Includes archived locations" tone="blue" />
+        <MetricCard icon={TimerReset} iconSize="subtle" label="Active locations" value={activeCount} detail="Available to guards" tone="green" />
+        <MetricCard icon={Banknote} iconSize="subtle" label="Active locations accepting cash" value={activeCashCount} detail="Operational locations only" tone="amber" />
       </div>
 
       {locations.isLoading && <LoadingState />}
       {locations.isError && <ErrorState error={locations.error} />}
-      {locations.data && locations.data.items.length === 0 && <EmptyState>No locations yet.</EmptyState>}
+      {locations.data && locations.data.items.length === 0 && (
+        <EmptyState>
+          <div className="space-y-3">
+            <p className="font-semibold text-slate-900">Create your first parking location</p>
+            <p className="mx-auto max-w-md leading-6">Your tenant account is ready. Add a location within your membership allowance, then assign an active rate plan before accepting vehicle entries.</p>
+            <Button type="button" size="sm" onClick={() => setEditing('new')} disabled={!canCreateLocation || locationQuota.isLoading || locationQuota.isError}>
+              <Plus className="h-4 w-4" />
+              Create first location
+            </Button>
+          </div>
+        </EmptyState>
+      )}
 
       {locations.data && locations.data.items.length > 0 && (
-        <Table>
-          <THead>
-            <tr>
-              <Th>Name</Th>
-              <Th>Slug</Th>
-              <Th>Grace</Th>
-              <Th>Cash</Th>
-              <Th>Assigned rate plan</Th>
-              <Th>Status</Th>
-              <Th />
-            </tr>
-          </THead>
-          <TBody>
-            {locations.data.items.map((l) => (
-              <tr key={l.id}>
-                <Td className="font-medium text-slate-900">{l.name}</Td>
-                <Td className="font-mono text-xs">{l.slug}</Td>
-                <Td>{l.exitGraceMinutes}m</Td>
-                <Td>{l.allowCashPayment ? 'Yes' : 'No'}</Td>
-                <Td>
-                  {l.activeRatePlanId ? planNames.get(l.activeRatePlanId) ?? 'Assigned plan' : <span className="text-amber-700">None</span>}
-                </Td>
-                <Td>
-                  <Badge tone={l.status === 'Active' ? 'green' : 'neutral'}>{l.status}</Badge>
-                </Td>
-                <Td className="space-x-3 text-right">
-                  <button className="text-sm font-medium text-brand-700 hover:underline" onClick={() => setEditing(l)}>
-                    <Pencil className="mr-1 inline h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  {l.status === 'Active' && (
-                    <button
-                      className="text-sm font-medium text-red-600 hover:underline"
-                      onClick={() => archive.mutate(l.id)}
-                    >
-                      <Archive className="mr-1 inline h-3.5 w-3.5" />
-                      Archive
-                    </button>
-                  )}
-                </Td>
-              </tr>
-            ))}
-          </TBody>
-        </Table>
+        <section className="overflow-hidden rounded-lg bg-white/95 shadow-sm ring-1 ring-slate-200/80">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Location status">
+              {([
+                ['active', 'Active', activeCount],
+                ['archived', 'Archived', archivedCount],
+                ['all', 'All', allLocations.length],
+              ] as const).map(([value, label, count]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={statusFilter === value}
+                  onClick={() => setStatusFilter(value)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${statusFilter === value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  {label} <span className="text-xs text-slate-400">{count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search locations" className="h-10 pl-9" aria-label="Search locations" />
+            </div>
+          </div>
+
+          {filteredLocations.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-slate-500">No locations match the current filters.</div>
+          ) : (
+            <Table className="divide-y-0">
+              <THead>
+                <tr>
+                  <Th>Location</Th>
+                  <Th>Capacity</Th>
+                  <Th>Grace period</Th>
+                  <Th>Payment methods</Th>
+                  <Th>Rate plan</Th>
+                  <Th>Status</Th>
+                  <Th />
+                </tr>
+              </THead>
+              <TBody>
+                {filteredLocations.map((l) => {
+                  const plan = l.activeRatePlanId ? ratePlans.data?.items.find((item) => item.id === l.activeRatePlanId) : undefined;
+                  return (
+                    <tr key={l.id}>
+                      <Td>
+                        <button type="button" className="text-left font-semibold text-brand-700 hover:text-brand-900 hover:underline" onClick={() => setEditing(l)}>
+                          {l.name}
+                          <span className="mt-0.5 block font-mono text-xs font-normal text-slate-400">{l.slug}</span>
+                        </button>
+                      </Td>
+                      <Td>{l.slotCapacity ?? '-'} slots</Td>
+                      <Td>{plan?.paidExitGraceMinutes != null ? `${plan.paidExitGraceMinutes} minutes` : '—'}</Td>
+                      <Td>{l.allowCashPayment ? 'Cash' : 'Digital only'}</Td>
+                      <Td>
+                        {l.activeRatePlanId ? plan?.name ?? 'Assigned plan' : <span className="font-medium text-amber-700">Not assigned</span>}
+                      </Td>
+                      <Td>
+                        <Badge tone={l.status === 'Active' ? 'green' : 'neutral'}>
+                          {l.status === 'Active' ? <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> : <Archive className="mr-1 h-3.5 w-3.5" />}
+                          {l.status}
+                        </Badge>
+                      </Td>
+                      <Td className="whitespace-nowrap text-right">
+                        {l.status === 'Active' ? (
+                          <div className="flex justify-end gap-3">
+                            <button className="text-sm font-medium text-brand-700 hover:underline" onClick={() => setEditing(l)}>
+                              <Pencil className="mr-1 inline h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                            <button className="text-sm font-medium text-red-600 hover:underline" onClick={() => archive.mutate(l.id)} disabled={archive.isPending}>
+                              <Archive className="mr-1 inline h-3.5 w-3.5" />
+                              Archive
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end gap-3">
+                            <button className="text-sm font-medium text-brand-700 hover:underline" onClick={() => setEditing(l)}>
+                              View details
+                            </button>
+                            <button className="text-sm font-medium text-emerald-700 hover:underline" onClick={() => restore.mutate(l.id)} disabled={restore.isPending}>
+                              <RotateCcw className="mr-1 inline h-3.5 w-3.5" />
+                              Restore
+                            </button>
+                          </div>
+                        )}
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          )}
+        </section>
       )}
 
       {editing && (
@@ -147,8 +260,8 @@ function LocationModal({
           slug: location.slug,
           address: location.address ?? '',
           timezone: location.timezone,
-          exitGraceMinutes: location.exitGraceMinutes,
           allowCashPayment: location.allowCashPayment,
+          slotCapacity: location.slotCapacity ?? 20,
           ratePlanId: location.activeRatePlanId,
         }
       : { ...empty, ratePlanId: null },
@@ -197,20 +310,20 @@ function LocationModal({
             onChange={(e) => setForm({ ...form, address: e.target.value })}
           />
         </FormField>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Timezone" htmlFor="tz">
-            <Input id="tz" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
-          </FormField>
-          <FormField label="Exit grace (min)" htmlFor="grace">
-            <Input
-              id="grace"
-              type="number"
-              min={0}
-              value={form.exitGraceMinutes}
-              onChange={(e) => setForm({ ...form, exitGraceMinutes: Number(e.target.value) })}
-            />
-          </FormField>
-        </div>
+        <FormField label="Timezone" htmlFor="tz">
+          <Input id="tz" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
+        </FormField>
+        <FormField label="Parking slots" htmlFor="slot-capacity">
+          <Input
+            id="slot-capacity"
+            type="number"
+            min={1}
+            value={form.slotCapacity}
+            onChange={(e) => setForm({ ...form, slotCapacity: Number(e.target.value) })}
+            required
+          />
+          <p className="text-sm text-slate-500">The tenant subscription determines the maximum allowed capacity.</p>
+        </FormField>
         <label className="flex items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
           <input
             type="checkbox"

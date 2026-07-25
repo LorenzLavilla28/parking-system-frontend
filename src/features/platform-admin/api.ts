@@ -9,15 +9,11 @@ export interface Tenant {
   subscriptionPlan: string;
   defaultCurrency: string;
   defaultTimezone: string;
+  maximumLocations?: number;
+  maximumSlotsPerLocation?: number | null;
+  monthlyPrice?: number | null;
   createdAt: string;
   updatedAt: string;
-  firstLocation?: TenantOnboardingLocation | null;
-}
-
-export interface TenantOnboardingLocation {
-  id: string;
-  name: string;
-  slug: string;
 }
 
 export interface CreateTenantInput {
@@ -30,7 +26,6 @@ export interface CreateTenantInput {
   adminLastName: string;
   adminEmail: string;
   adminPassword: string;
-  firstLocation: CreateTenantLocationInput;
 }
 
 export interface CreateTenantLocationInput {
@@ -38,8 +33,7 @@ export interface CreateTenantLocationInput {
   slug: string;
   address?: string | null;
   timezone: string;
-  exitGraceMinutes: number;
-  allowCashPayment: boolean;
+  slotCapacity: number;
 }
 
 export interface HealthReadiness {
@@ -47,7 +41,7 @@ export interface HealthReadiness {
   database: string;
 }
 
-export const SUBSCRIPTION_PLANS = ['Free', 'Starter', 'Growth', 'Enterprise'] as const;
+export const SUBSCRIPTION_PLANS = ['Starter', 'Growth', 'Enterprise', 'Custom'] as const;
 export const TENANT_STATUSES = ['Active', 'Suspended', 'Archived'] as const;
 
 export const platformApi = {
@@ -55,6 +49,8 @@ export const platformApi = {
   createTenant: (body: CreateTenantInput) => api.post<Tenant>('/api/platform/tenants', body),
   changeStatus: (id: string, status: string) =>
     api.patch<Tenant>(`/api/platform/tenants/${id}/status`, { status }),
+  createAddOnLocation: (id: string, body: CreateTenantLocationInput & { monthlyPrice?: number | null }) =>
+    api.post<Tenant>(`/api/platform/tenants/${id}/location-addons`, body),
   health: async () => {
     const response = await http.get<HealthReadiness>('/api/health/ready');
     return response.data;

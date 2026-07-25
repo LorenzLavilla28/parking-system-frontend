@@ -54,11 +54,6 @@ function tenant(): Tenant {
     defaultTimezone: 'Asia/Manila',
     createdAt: '2026-06-23T10:00:00.000Z',
     updatedAt: '2026-06-23T10:00:00.000Z',
-    firstLocation: {
-      id: 'location-1',
-      name: 'Main Branch',
-      slug: 'main-branch',
-    },
   };
 }
 
@@ -90,7 +85,7 @@ describe('PlatformTenantsPage onboarding', () => {
     expect(createTenant).not.toHaveBeenCalled();
   });
 
-  it('creates a tenant with first administrator and first location', async () => {
+  it('creates a tenant with first administrator and selected membership tier', async () => {
     const user = await openWizard();
 
     await user.type(screen.getByLabelText('Tenant name'), 'Acme Parking');
@@ -103,12 +98,8 @@ describe('PlatformTenantsPage onboarding', () => {
     await user.type(screen.getByLabelText('Temporary password'), 'StrongPass!2026');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await user.type(screen.getByLabelText('Location name'), 'Main Branch');
-    expect(screen.getByLabelText('Location slug')).toHaveValue('main-branch');
-    await user.type(screen.getByLabelText('Address'), 'Level 2');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Create tenant' }));
 
     await waitFor(() => {
@@ -122,14 +113,6 @@ describe('PlatformTenantsPage onboarding', () => {
         adminLastName: 'Lovelace',
         adminEmail: 'ada@acme.test',
         adminPassword: 'StrongPass!2026',
-        firstLocation: {
-          name: 'Main Branch',
-          slug: 'main-branch',
-          address: 'Level 2',
-          timezone: 'Asia/Manila',
-          exitGraceMinutes: 15,
-          allowCashPayment: true,
-        },
       });
     });
 

@@ -5,7 +5,7 @@ export function sessionStatusView(status: string): { tone: Tone; label: string }
     case 'ActiveUnpaid':
       return { tone: 'amber', label: 'Unpaid' };
     case 'PaymentPending':
-      return { tone: 'blue', label: 'Payment pending' };
+      return { tone: 'red', label: 'Payment pending' };
     case 'PaidExitWindow':
       return { tone: 'green', label: 'Paid' };
     case 'OverstayDue':

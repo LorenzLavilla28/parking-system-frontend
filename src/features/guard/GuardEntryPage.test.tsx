@@ -29,6 +29,7 @@ const demoLocation: GuardLocation = {
   slug: 'demo-mall',
   timezone: 'Asia/Manila',
   allowCashPayment: true,
+  slotCapacity: 20,
 };
 
 function guardLocationState(overrides: {
@@ -102,7 +103,7 @@ describe('GuardEntryPage', () => {
     expect(screen.getByText('Status unavailable')).toBeInTheDocument();
     expect(screen.getByText('Entries today')).toBeInTheDocument();
     expect(screen.getByText('Not available')).toBeInTheDocument();
-    expect(await screen.findByText('0')).toBeInTheDocument();
+    expect(await screen.findByText('0 / 20')).toBeInTheDocument();
 
     const pageText = document.body.textContent ?? '';
     expect(pageText).not.toMatch(/backend|endpoint|printer-status|daily entry count|upload support/i);

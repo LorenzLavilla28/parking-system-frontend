@@ -137,7 +137,7 @@ function DesktopSidebar({
   onWorkspaceSelect: (workspace: WorkspaceDefinition) => void;
 }) {
   return (
-    <aside className="sticky top-0 hidden h-screen min-h-0 border-r border-slate-200/80 bg-white/92 shadow-sm lg:flex lg:flex-col">
+    <aside className="sticky top-0 z-40 hidden h-screen min-h-0 border-r border-slate-200/80 bg-white/92 shadow-sm lg:flex lg:flex-col">
       <div className={cn('border-b border-slate-100', collapsed ? 'p-3' : 'p-4')}>
         <Link
           to={activeWorkspace.defaultPath}
@@ -205,7 +205,7 @@ function DesktopTopBar({
   return (
     <header
       className={cn(
-        'sticky top-0 z-30 hidden h-16 items-center border-b border-white/70 bg-white/85 px-6 backdrop-blur-xl lg:flex',
+        'sticky top-0 z-50 hidden h-16 items-center border-b border-white/70 bg-white/85 px-6 backdrop-blur-xl lg:flex',
         showLocation ? 'justify-between' : 'justify-end',
       )}
     >

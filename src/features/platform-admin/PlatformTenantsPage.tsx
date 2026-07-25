@@ -9,7 +9,6 @@ import {
   Eye,
   EyeOff,
   KeyRound,
-  MapPin,
   Plus,
   ShieldCheck,
   Users,
@@ -33,11 +32,9 @@ const statusTone = (status: string) => (status === 'Active' ? 'green' : status =
 
 const currencyOptions = ['PHP', 'USD', 'SGD'];
 const timezoneOptions = ['Asia/Manila', 'Asia/Singapore', 'UTC'];
-
 const steps = [
   { title: 'Company', description: 'Tenant profile' },
   { title: 'Administrator', description: 'First admin' },
-  { title: 'Location', description: 'First branch' },
   { title: 'Operations', description: 'Starter setup' },
   { title: 'Review', description: 'Confirm details' },
 ] as const;
@@ -45,9 +42,8 @@ const steps = [
 const stepFields: Record<number, FieldName[]> = {
   0: ['name', 'slug', 'defaultCurrency', 'defaultTimezone'],
   1: ['adminFirstName', 'adminLastName', 'adminEmail', 'adminPassword'],
-  2: ['locationName', 'locationSlug', 'locationTimezone', 'exitGraceMinutes'],
+  2: [],
   3: [],
-  4: [],
 };
 
 type FieldName =
@@ -58,17 +54,14 @@ type FieldName =
   | 'adminFirstName'
   | 'adminLastName'
   | 'adminEmail'
-  | 'adminPassword'
-  | 'locationName'
-  | 'locationSlug'
-  | 'locationTimezone'
-  | 'exitGraceMinutes';
+  | 'adminPassword';
 
 type FormErrors = Partial<Record<FieldName, string>>;
 
 export function PlatformTenantsPage() {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [addOnTenant, setAddOnTenant] = useState<Tenant | null>(null);
 
   const tenants = useQuery({ queryKey: ['platform-tenants'], queryFn: () => platformApi.listTenants() });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
@@ -83,7 +76,7 @@ export function PlatformTenantsPage() {
       <PageHeader
         eyebrow="Platform"
         title="Tenants"
-        description="Onboard operators, create their first administrator, and prepare the first parking location."
+        description="Create the tenant account, assign its paid membership tier, and provision the first administrator."
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
@@ -110,6 +103,7 @@ export function PlatformTenantsPage() {
               <Th>Plan</Th>
               <Th>Status</Th>
               <Th>Change status</Th>
+              <Th>Add-on</Th>
             </tr>
           </THead>
           <TBody>
@@ -122,17 +116,25 @@ export function PlatformTenantsPage() {
                   <Badge tone={statusTone(tenant.status)}>{tenant.status}</Badge>
                 </Td>
                 <Td>
-                  <Select
-                    className="h-9 max-w-[10rem]"
-                    value={tenant.status}
-                    onChange={(event) => changeStatus.mutate({ id: tenant.id, status: event.target.value })}
-                  >
-                    {TENANT_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      className="h-9 max-w-[10rem]"
+                      value={tenant.status}
+                      onChange={(event) => changeStatus.mutate({ id: tenant.id, status: event.target.value })}
+                    >
+                      {TENANT_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                </Td>
+                <Td>
+                  <Button type="button" variant="secondary" onClick={() => setAddOnTenant(tenant)}>
+                    <Plus className="h-4 w-4" />
+                    Location
+                  </Button>
                 </Td>
               </tr>
             ))}
@@ -148,7 +150,71 @@ export function PlatformTenantsPage() {
           }}
         />
       )}
+      {addOnTenant && <AddOnLocationModal tenant={addOnTenant} onClose={() => setAddOnTenant(null)} onCreated={invalidate} />}
     </div>
+  );
+}
+
+function AddOnLocationModal({ tenant, onClose, onCreated }: { tenant: Tenant; onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({
+    name: '',
+    slug: '',
+    address: '',
+    timezone: tenant.defaultTimezone,
+    slotCapacity: 20,
+    monthlyPrice: '',
+  });
+  const addOn = useMutation({
+    mutationFn: () => platformApi.createAddOnLocation(tenant.id, {
+      name: form.name.trim(),
+      slug: (form.slug || slugify(form.name)).trim(),
+      address: form.address.trim() || null,
+      timezone: form.timezone,
+      slotCapacity: form.slotCapacity,
+      monthlyPrice: form.monthlyPrice ? Number(form.monthlyPrice) : null,
+    }),
+    onSuccess: () => {
+      onCreated();
+      onClose();
+    },
+  });
+  const standardPrice = form.slotCapacity <= 20 ? 3000 : form.slotCapacity <= 50 ? 6000 : form.slotCapacity <= 90 ? 10000 : null;
+
+  return (
+    <Modal open onClose={onClose} title={`Add location to ${tenant.name}`} size="lg">
+      <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); addOn.mutate(); }}>
+        <Alert tone="info">This provisions a platform-approved paid add-on. Standard capacity bands are priced automatically; capacities above 90 require a custom monthly price.</Alert>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="Location name" htmlFor="addon-name">
+            <Input id="addon-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
+          </FormField>
+          <FormField label="Slug" htmlFor="addon-slug">
+            <Input id="addon-slug" value={form.slug} onChange={(event) => setForm({ ...form, slug: slugify(event.target.value) })} placeholder="branch-two" required />
+          </FormField>
+        </div>
+        <FormField label="Address" htmlFor="addon-address">
+          <Input id="addon-address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
+        </FormField>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="Timezone" htmlFor="addon-timezone">
+            <Select id="addon-timezone" value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })}>
+              {timezoneOptions.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
+            </Select>
+          </FormField>
+          <FormField label="Parking slots" htmlFor="addon-slots">
+            <Input id="addon-slots" type="number" min={1} value={form.slotCapacity} onChange={(event) => setForm({ ...form, slotCapacity: Number(event.target.value) })} required />
+          </FormField>
+        </div>
+        <FormField label="Monthly add-on price (PHP)" htmlFor="addon-price">
+          <Input id="addon-price" type="number" min={1} value={form.monthlyPrice || (standardPrice ?? '')} onChange={(event) => setForm({ ...form, monthlyPrice: event.target.value })} placeholder={standardPrice ? String(standardPrice) : 'Required for custom capacity'} required={!standardPrice} />
+        </FormField>
+        {addOn.isError && <ErrorState error={addOn.error} />}
+        <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" loading={addOn.isPending}>Provision add-on</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -162,23 +228,13 @@ const emptyTenant: CreateTenantInput = {
   adminLastName: '',
   adminEmail: '',
   adminPassword: '',
-  firstLocation: {
-    name: '',
-    slug: '',
-    address: '',
-    timezone: 'Asia/Manila',
-    exitGraceMinutes: 15,
-    allowCashPayment: true,
-  },
 };
 
 function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (tenant: Tenant) => void }) {
-  const [form, setForm] = useState<CreateTenantInput>({ ...emptyTenant, firstLocation: { ...emptyTenant.firstLocation } });
+  const [form, setForm] = useState<CreateTenantInput>({ ...emptyTenant });
   const [step, setStep] = useState(0);
   const [attemptedSteps, setAttemptedSteps] = useState<Record<number, boolean>>({});
   const [tenantSlugEdited, setTenantSlugEdited] = useState(false);
-  const [locationSlugEdited, setLocationSlugEdited] = useState(false);
-  const [locationTimezoneEdited, setLocationTimezoneEdited] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [createdTenant, setCreatedTenant] = useState<Tenant | null>(null);
   const [createdAdminEmail, setCreatedAdminEmail] = useState('');
@@ -197,9 +253,7 @@ function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; o
   });
 
   const set = (patch: Partial<CreateTenantInput>) => setForm((current) => ({ ...current, ...patch }));
-  const setLocation = (patch: Partial<CreateTenantInput['firstLocation']>) =>
-    setForm((current) => ({ ...current, firstLocation: { ...current.firstLocation, ...patch } }));
-  const errorFor = (field: FieldName) => (attemptedSteps[step] || attemptedSteps[4] ? errors[field] : undefined);
+  const errorFor = (field: FieldName) => (attemptedSteps[step] || attemptedSteps[3] ? errors[field] : undefined);
 
   function goNext() {
     if (!currentStepValid) {
@@ -211,7 +265,7 @@ function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; o
 
   function submit() {
     if (!allValid) {
-      setAttemptedSteps({ 0: true, 1: true, 2: true, 3: true, 4: true });
+      setAttemptedSteps({ 0: true, 1: true, 2: true, 3: true });
       const firstInvalidStep = steps.findIndex((_, index) => stepFields[index].some((field) => errors[field]));
       if (firstInvalidStep >= 0) setStep(firstInvalidStep);
       return;
@@ -256,14 +310,7 @@ function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; o
               onPlanChange={(subscriptionPlan) => set({ subscriptionPlan })}
               onCurrencyChange={(defaultCurrency) => set({ defaultCurrency: defaultCurrency.toUpperCase() })}
               onTimezoneChange={(defaultTimezone) => {
-                setForm((current) => ({
-                  ...current,
-                  defaultTimezone,
-                  firstLocation: {
-                    ...current.firstLocation,
-                    timezone: locationTimezoneEdited ? current.firstLocation.timezone : defaultTimezone,
-                  },
-                }));
+                set({ defaultTimezone });
               }}
             />
           )}
@@ -282,32 +329,8 @@ function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; o
             />
           )}
 
-          {step === 2 && (
-            <LocationStep
-              form={form}
-              errorFor={errorFor}
-              onNameChange={(name) => {
-                setLocation({
-                  name,
-                  slug: locationSlugEdited ? form.firstLocation.slug : slugify(name),
-                });
-              }}
-              onSlugChange={(slug) => {
-                setLocationSlugEdited(true);
-                setLocation({ slug: slugify(slug) });
-              }}
-              onAddressChange={(address) => setLocation({ address })}
-              onTimezoneChange={(timezone) => {
-                setLocationTimezoneEdited(true);
-                setLocation({ timezone });
-              }}
-              onExitGraceChange={(exitGraceMinutes) => setLocation({ exitGraceMinutes })}
-              onAllowCashChange={(allowCashPayment) => setLocation({ allowCashPayment })}
-            />
-          )}
-
-          {step === 3 && <OperationsStep />}
-          {step === 4 && <ReviewStep form={form} />}
+          {step === 2 && <OperationsStep />}
+          {step === 3 && <ReviewStep form={form} />}
 
           {save.isError && <ErrorState error={save.error} />}
 
@@ -495,97 +518,28 @@ function AdminStep({
   );
 }
 
-function LocationStep({
-  form,
-  errorFor,
-  onNameChange,
-  onSlugChange,
-  onAddressChange,
-  onTimezoneChange,
-  onExitGraceChange,
-  onAllowCashChange,
-}: {
-  form: CreateTenantInput;
-  errorFor: (field: FieldName) => string | undefined;
-  onNameChange: (value: string) => void;
-  onSlugChange: (value: string) => void;
-  onAddressChange: (value: string) => void;
-  onTimezoneChange: (value: string) => void;
-  onExitGraceChange: (value: number) => void;
-  onAllowCashChange: (value: boolean) => void;
-}) {
-  return (
-    <section className="space-y-4">
-      <SectionTitle
-        icon={MapPin}
-        title="First parking location"
-        description="Create the first branch so the tenant can start configuring rates and gate users."
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Location name" htmlFor="location-name" error={errorFor('locationName')}>
-          <Input id="location-name" value={form.firstLocation.name} onChange={(event) => onNameChange(event.target.value)} />
-        </FormField>
-        <FormField label="Location slug" htmlFor="location-slug" error={errorFor('locationSlug')}>
-          <Input id="location-slug" value={form.firstLocation.slug} onChange={(event) => onSlugChange(event.target.value)} placeholder="main-branch" />
-        </FormField>
-      </div>
-      <FormField label="Address" htmlFor="location-address">
-        <Input id="location-address" value={form.firstLocation.address ?? ''} onChange={(event) => onAddressChange(event.target.value)} placeholder="Street address or mall level" />
-      </FormField>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <FormField label="Timezone" htmlFor="location-timezone" error={errorFor('locationTimezone')}>
-          <Select id="location-timezone" value={form.firstLocation.timezone} onChange={(event) => onTimezoneChange(event.target.value)}>
-            {timezoneOptions.map((timezone) => (
-              <option key={timezone} value={timezone}>
-                {timezone}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Exit grace minutes" htmlFor="exit-grace" error={errorFor('exitGraceMinutes')}>
-          <Input
-            id="exit-grace"
-            type="number"
-            min={0}
-            max={120}
-            value={form.firstLocation.exitGraceMinutes}
-            onChange={(event) => onExitGraceChange(Number(event.target.value))}
-          />
-        </FormField>
-      </div>
-      <label className="flex min-h-11 items-start gap-3 rounded-lg bg-slate-50 p-4 text-sm ring-1 ring-slate-200">
-        <input
-          type="checkbox"
-          checked={form.firstLocation.allowCashPayment}
-          onChange={(event) => onAllowCashChange(event.target.checked)}
-          className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500"
-        />
-        <span>
-          <span className="block font-bold text-slate-950">Allow cash payment at this location</span>
-          <span className="block leading-6 text-slate-600">Guards can record approved cash payments for exit workflows.</span>
-        </span>
-      </label>
-    </section>
-  );
-}
-
 function OperationsStep() {
   return (
     <section className="space-y-4">
       <SectionTitle
         icon={ClipboardList}
         title="Starter operating setup"
-        description="The tenant, first admin, and first location will be created now. These items are the next setup steps."
+        description="The tenant and first administrator will be created now. Location setup continues inside the tenant workspace."
       />
       <div className="grid gap-3">
         <NextSetupItem
+          title="Create the first parking location"
+          description="After the tenant admin signs in, create a location from Administration > Locations. The selected tier controls its capacity and location allowance."
+          badge="Next action"
+        />
+        <NextSetupItem
           title="Create rate plan"
-          description="After the tenant admin signs in, create the first rate plan from Administration > Rate plans."
+          description="Create the first rate plan from Administration > Rate plans, then assign it to the new location before live entries begin."
           badge="Next action"
         />
         <NextSetupItem
           title="Add guards and supervisors"
-          description="Use Administration > Users to invite gate staff and assign them to the first location."
+          description="Use Administration > Users to invite gate staff and assign them to a location."
           badge="Next action"
         />
         <NextSetupItem
@@ -618,11 +572,10 @@ function ReviewStep({ form }: { form: CreateTenantInput }) {
           <ReviewItem label="Email" value={form.adminEmail.trim().toLowerCase()} />
           <ReviewItem label="Credential" value="Temporary password set" />
         </ReviewPanel>
-        <ReviewPanel title="First location">
-          <ReviewItem label="Location" value={form.firstLocation.name} />
-          <ReviewItem label="Slug" value={form.firstLocation.slug} monospace />
-          <ReviewItem label="Timezone" value={form.firstLocation.timezone} />
-          <ReviewItem label="Cash payments" value={form.firstLocation.allowCashPayment ? 'Allowed' : 'Not allowed'} />
+        <ReviewPanel title="Operational setup">
+          <ReviewItem label="Location" value="Not created during onboarding" />
+          <ReviewItem label="Next step" value="Create a location in the tenant workspace" />
+          <ReviewItem label="Entry readiness" value="Requires an assigned active rate plan" />
         </ReviewPanel>
       </div>
     </section>
@@ -638,7 +591,7 @@ function OnboardingSuccess({ tenant, adminEmail, onClose }: { tenant: Tenant; ad
           <div>
             <h3 className="text-lg font-bold">Tenant onboarding started</h3>
             <p className="mt-1 text-sm leading-6">
-              {tenant.name} was created with its first administrator and first parking location.
+              {tenant.name} was created with its paid membership tier and first administrator. No location was created yet.
             </p>
           </div>
         </div>
@@ -654,9 +607,10 @@ function OnboardingSuccess({ tenant, adminEmail, onClose }: { tenant: Tenant; ad
           <ReviewItem label="Email" value={adminEmail} />
           <ReviewItem label="Workspace" value="Administration" />
         </ReviewPanel>
-        <ReviewPanel title="First location">
-          <ReviewItem label="Name" value={tenant.firstLocation?.name ?? 'Created'} />
-          <ReviewItem label="Slug" value={tenant.firstLocation?.slug ?? 'Ready for setup'} monospace />
+        <ReviewPanel title="Next setup">
+          <ReviewItem label="Location" value="Create in tenant workspace" />
+          <ReviewItem label="Rate plan" value="Assign before accepting entries" />
+          <ReviewItem label="Capacity" value="Controlled by the selected tier" />
         </ReviewPanel>
       </div>
 
@@ -750,15 +704,6 @@ function validateTenantOnboarding(form: CreateTenantInput): FormErrors {
   if (!form.adminPassword) errors.adminPassword = 'Enter a temporary password.';
   else if (form.adminPassword.length < 10) errors.adminPassword = 'Use at least 10 characters.';
 
-  if (!form.firstLocation.name.trim()) errors.locationName = 'Enter the location name.';
-  if (!form.firstLocation.slug.trim()) errors.locationSlug = 'Enter a location slug.';
-  else if (!isValidSlug(form.firstLocation.slug)) errors.locationSlug = 'Use lowercase letters, numbers, and hyphens.';
-  if (!form.firstLocation.timezone.trim()) errors.locationTimezone = 'Choose a location timezone.';
-  if (Number.isNaN(form.firstLocation.exitGraceMinutes)) errors.exitGraceMinutes = 'Enter exit grace minutes.';
-  else if (form.firstLocation.exitGraceMinutes < 0 || form.firstLocation.exitGraceMinutes > 120) {
-    errors.exitGraceMinutes = 'Use 0 to 120 minutes.';
-  }
-
   return errors;
 }
 
@@ -773,14 +718,6 @@ function toCreateTenantPayload(form: CreateTenantInput): CreateTenantInput {
     adminLastName: form.adminLastName.trim(),
     adminEmail: form.adminEmail.trim().toLowerCase(),
     adminPassword: form.adminPassword,
-    firstLocation: {
-      name: form.firstLocation.name.trim(),
-      slug: form.firstLocation.slug.trim(),
-      address: form.firstLocation.address?.trim() || null,
-      timezone: form.firstLocation.timezone,
-      exitGraceMinutes: form.firstLocation.exitGraceMinutes,
-      allowCashPayment: form.firstLocation.allowCashPayment,
-    },
   };
 }
 

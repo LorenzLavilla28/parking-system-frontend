@@ -1,6 +1,7 @@
 /** Formatting helpers for money, dates, and durations (display only). */
 
-export function formatMoney(amount: number, currency = 'PHP'): string {
+export function formatMoney(amount: number | null | undefined, currency = 'PHP'): string {
+  if (amount == null || !Number.isFinite(amount)) return 'Not available';
   try {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency }).format(amount);
   } catch {
@@ -12,10 +13,25 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat('en-PH', {
+  return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(d);
+}
+
+export function formatPaymentTimestamp(iso: string | null | undefined, withSeconds = false): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const time = new Intl.DateTimeFormat('en-PH', {
     dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(d);
+    timeStyle: withSeconds ? 'medium' : 'short',
+    timeZone: 'Asia/Manila',
+  }).format(d).replace(' at ', ' · ');
+  return `${time} · Asia/Manila`;
+}
+
+export function formatDateInput(value: string): string {
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return value;
+  return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' }).format(d);
 }
 
 export function formatTime(iso: string | null | undefined): string {

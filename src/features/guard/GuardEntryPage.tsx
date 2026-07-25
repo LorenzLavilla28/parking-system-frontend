@@ -99,8 +99,12 @@ export function GuardEntryPage() {
       ? 'Select a working location before recording an entry.'
       : !plate.trim()
         ? 'Enter a plate number to continue.'
+        : selected && (activeSessions.data?.items.length ?? 0) >= selected.slotCapacity
+          ? 'This location is full. Record an exit before accepting another vehicle.'
         : null;
   const canSubmit = !submitBlockReason && !checkingOrRecording;
+  const activeCount = activeSessions.data?.items.length ?? 0;
+  const isFull = !!selected && activeCount >= selected.slotCapacity;
 
   return (
     <div className="space-y-6">
@@ -169,6 +173,12 @@ export function GuardEntryPage() {
               {duplicateCheck.isError && <ErrorState error={duplicateCheck.error} />}
               {entry.isError && <ErrorState error={entry.error} />}
 
+              {isFull && (
+                <div className="rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-950 ring-1 ring-amber-200" role="alert">
+                  This location is full ({activeCount} / {selected?.slotCapacity} slots).
+                </div>
+              )}
+
               {submitBlockReason && (
                 <p id="record-entry-help" className="text-sm font-semibold text-slate-600">
                   {submitBlockReason}
@@ -210,7 +220,7 @@ export function GuardEntryPage() {
               />
               <OperationalRow
                 label="Active sessions"
-                value={activeSessions.data ? String(activeSessions.data.items.length) : activeSessions.isLoading ? 'Loading...' : 'Unavailable'}
+                value={activeSessions.data ? `${activeCount} / ${selected?.slotCapacity ?? '-'}` : activeSessions.isLoading ? 'Loading...' : 'Unavailable'}
                 icon={<CircleDot className="h-4 w-4" />}
               />
               <OperationalRow

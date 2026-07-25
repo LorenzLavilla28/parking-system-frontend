@@ -7,6 +7,7 @@ export interface GuardLocation {
   slug: string;
   timezone: string;
   allowCashPayment: boolean;
+  slotCapacity: number;
 }
 
 export interface EntryTicket {
@@ -29,6 +30,10 @@ export interface SessionSummary {
   vehicleColor: string | null;
   entryTime: string;
   status: string;
+  pricingAvailable: boolean;
+  currency: string;
+  currentFee: number;
+  outstanding: number;
   finalFee: number | null;
   totalPaid: number;
   paidExitDeadline: string | null;

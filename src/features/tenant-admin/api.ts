@@ -12,8 +12,8 @@ export interface Location {
   address: string | null;
   timezone: string;
   status: string;
-  exitGraceMinutes: number;
   allowCashPayment: boolean;
+  slotCapacity?: number;
   activeRatePlanId?: string | null;
   publicQrCodeUrl: string | null;
   createdAt: string;
@@ -25,10 +25,18 @@ export interface LocationInput {
   slug?: string;
   address?: string | null;
   timezone: string;
-  exitGraceMinutes: number;
   allowCashPayment: boolean;
+  slotCapacity: number;
   ratePlanId?: string | null;
   clearRatePlan?: boolean;
+}
+
+export interface LocationQuota {
+  subscriptionPlan: string;
+  activeLocations: number;
+  maximumLocations: number | null;
+  maximumSlotsPerLocation: number | null;
+  canCreateLocation: boolean;
 }
 
 // ---- Users -----------------------------------------------------------------
@@ -143,6 +151,8 @@ export interface PaymentQuery {
   sessionId?: string;
   from?: string;
   to?: string;
+  sortBy?: 'time' | 'amount';
+  sortDirection?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
 }
@@ -221,6 +231,8 @@ export interface PaymentDetail {
     finalFee: number | null;
     totalPaid: number;
     paidExitDeadline: string | null;
+    currentFee?: number | null;
+    currentOutstanding?: number | null;
   };
   quote: {
     id: string;
@@ -246,8 +258,10 @@ export interface RatePlan {
   description: string;
   status: string;
   currentVersionNumber: number | null;
+  paidExitGraceMinutes: number | null;
   createdAt: string;
   updatedAt: string;
+  currentRulesJson?: string | null;
 }
 
 export interface RatePlanVersion {
@@ -270,10 +284,12 @@ export const adminApi = {
 
   // Locations
   listLocations: (q?: PageQuery) => api.get<PagedResult<Location>>('/api/tenant/locations', { params: q }),
+  getLocationQuota: () => api.get<LocationQuota>('/api/tenant/locations/quota'),
   createLocation: (body: LocationInput) => api.post<Location>('/api/tenant/locations', body),
   updateLocation: (id: string, body: Omit<LocationInput, 'slug'>) =>
     api.put<Location>(`/api/tenant/locations/${id}`, body),
   archiveLocation: (id: string) => api.del<void>(`/api/tenant/locations/${id}`),
+  restoreLocation: (id: string) => api.post<void>(`/api/tenant/locations/${id}/restore`, undefined),
 
   // Users
   listUsers: (q?: PageQuery) => api.get<PagedResult<User>>('/api/tenant/users', { params: q }),
@@ -288,6 +304,7 @@ export const adminApi = {
   listVersions: (id: string) => api.get<RatePlanVersion[]>(`/api/tenant/rate-plans/${id}/versions`),
   addVersion: (id: string, rulesJson: string) =>
     api.post<RatePlanVersion>(`/api/tenant/rate-plans/${id}/versions`, { rulesJson }),
+  archiveRatePlan: (id: string) => api.del<void>(`/api/tenant/rate-plans/${id}`),
 
   // Sessions (admins are permitted on the guard endpoint).
   listSessions: (params: { plate?: string; activeOnly?: boolean; locationId?: string }) =>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Check, Clock } from 'lucide-react';
 import { adminApi } from './api';
@@ -35,7 +35,10 @@ const units: PricingUnit[] = ['Hour', 'Minute', 'Fraction'];
 
 export function RatePlanBuilderPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const duplicateId = searchParams.get('duplicate');
   const isEditingVersion = Boolean(id);
+  const isDuplicating = !isEditingVersion && Boolean(duplicateId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState(0);
@@ -43,11 +46,10 @@ export function RatePlanBuilderPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [rules, setRulesState] = useState<RateRulesForm>(DEFAULT_RATE_RULES_FORM);
-  const [dailyMaxEnabled, setDailyMaxEnabled] = useState(DEFAULT_RATE_RULES_FORM.dailyMax !== '');
   const [lostTicketEnabled, setLostTicketEnabled] = useState(DEFAULT_RATE_RULES_FORM.lostTicketFee !== '');
   const [weekendEnabled, setWeekendEnabled] = useState(DEFAULT_RATE_RULES_FORM.weekendMultiplier !== '');
   const [holidayEnabled, setHolidayEnabled] = useState(DEFAULT_RATE_RULES_FORM.holidayMultiplier !== '');
-  const plans = useQuery({ queryKey: ['admin-rate-plans'], queryFn: () => adminApi.listRatePlans(), enabled: isEditingVersion });
+  const plans = useQuery({ queryKey: ['admin-rate-plans'], queryFn: () => adminApi.listRatePlans(), enabled: isEditingVersion || isDuplicating });
   const versions = useQuery({
     queryKey: ['rate-plan-versions', id],
     queryFn: () => adminApi.listVersions(id!),
@@ -55,18 +57,21 @@ export function RatePlanBuilderPage() {
   });
 
   const currentPlan = useMemo(() => plans.data?.items.find((plan) => plan.id === id), [id, plans.data?.items]);
+  const duplicateSource = useMemo(() => plans.data?.items.find((plan) => plan.id === duplicateId), [duplicateId, plans.data?.items]);
 
   useEffect(() => {
-    if (!currentPlan || !versions.data) return;
-    setName(currentPlan.name);
-    setDescription(currentPlan.description);
-    const parsed = parseRateRulesJson(versions.data[0]?.rulesJson);
+    const source = currentPlan ?? duplicateSource;
+    if (!source || (isEditingVersion && !versions.data)) return;
+    setName(isDuplicating ? `${source.name} copy` : source.name);
+    setDescription(source.description);
+    const parsed = isEditingVersion
+      ? parseRateRulesJson(versions.data?.[0]?.rulesJson)
+      : parseRateRulesJson(source.currentRulesJson ?? undefined);
     setRulesState(parsed);
-    setDailyMaxEnabled(parsed.dailyMax !== '');
     setLostTicketEnabled(parsed.lostTicketFee !== '');
     setWeekendEnabled(parsed.weekendMultiplier !== '');
     setHolidayEnabled(parsed.holidayMultiplier !== '');
-  }, [currentPlan, versions.data]);
+  }, [currentPlan, duplicateSource, isDuplicating, isEditingVersion, versions.data]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -96,7 +101,7 @@ export function RatePlanBuilderPage() {
   });
 
   const canContinue = step !== 0 || (name.trim() && description.trim());
-  const isBusy = isEditingVersion && (plans.isLoading || versions.isLoading);
+  const isBusy = (isEditingVersion || isDuplicating) && (plans.isLoading || versions.isLoading);
 
   if (isBusy) return <LoadingState label="Loading rate-plan builder..." />;
   if (plans.isError) return <ErrorState error={plans.error} />;
@@ -106,8 +111,10 @@ export function RatePlanBuilderPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Rate plans"
-        title={isEditingVersion ? `New version for ${currentPlan?.name ?? 'rate plan'}` : 'Create rate plan'}
-        description="Configure pricing in focused steps, then review the customer-facing fee behavior before saving."
+        title={isEditingVersion ? 'Edit rate plan' : isDuplicating ? 'Duplicate rate plan' : 'Create rate plan'}
+        description={isEditingVersion
+          ? 'Review the proposed pricing, then publish it as a new immutable revision.'
+          : 'Configure pricing in focused steps, then review the customer-facing fee behavior before publishing.'}
         actions={
           <Button variant="secondary" onClick={() => navigate('/admin/rate-plans')}>
             <ArrowLeft className="h-4 w-4" />
@@ -115,6 +122,13 @@ export function RatePlanBuilderPage() {
           </Button>
         }
       />
+
+      {isEditingVersion && (
+        <Alert tone="info">
+          Publishing these changes updates pricing for new parking sessions only. Existing sessions continue using the pricing revision that was active when they entered.
+          {currentPlan?.currentVersionNumber ? ` Current pricing: Revision ${currentPlan.currentVersionNumber}.` : ''}
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">
@@ -141,11 +155,6 @@ export function RatePlanBuilderPage() {
             {step === 2 && (
               <GraceStep
                 rules={rules}
-                dailyMaxEnabled={dailyMaxEnabled}
-                onDailyMaxEnabled={(enabled) => {
-                  setDailyMaxEnabled(enabled);
-                  setRules({ ...rules, dailyMax: enabled ? 250 : '' });
-                }}
                 onChange={setRules}
               />
             )}
@@ -170,8 +179,8 @@ export function RatePlanBuilderPage() {
                 onChange={setRules}
               />
             )}
-            {step === 4 && <AvailabilityStep />}
-            {step === 5 && <ReviewStep name={name} description={description} rules={rules} />}
+            {step === 4 && <AvailabilityStep isEditingVersion={isEditingVersion} />}
+            {step === 5 && <ReviewStep isEditingVersion={isEditingVersion} name={name} description={description} rules={rules} />}
 
             {create.isError && <div className="mt-4"><ErrorState error={create.error} /></div>}
 
@@ -192,7 +201,7 @@ export function RatePlanBuilderPage() {
               ) : (
                 <Button type="button" loading={create.isPending} disabled={!name.trim() || !description.trim()} onClick={() => create.mutate()}>
                   <Check className="h-4 w-4" />
-                  {isEditingVersion ? 'Add version' : 'Create rate plan'}
+                  {isEditingVersion ? 'Publish changes' : 'Create rate plan'}
                 </Button>
               )}
             </StickyFormActions>
@@ -313,18 +322,14 @@ function BasePricingStep({ rules, onChange }: { rules: RateRulesForm; onChange: 
 
 function GraceStep({
   rules,
-  dailyMaxEnabled,
-  onDailyMaxEnabled,
   onChange,
 }: {
   rules: RateRulesForm;
-  dailyMaxEnabled: boolean;
-  onDailyMaxEnabled: (enabled: boolean) => void;
   onChange: (rules: RateRulesForm) => void;
 }) {
   return (
     <section className="space-y-4">
-      <SectionTitle title="Grace periods and limits" description="Use clear operational rules for free exits, post-payment exit time, and daily caps." />
+      <SectionTitle title="Grace periods" description="Define the free-entry period and the time customers have to exit after payment." />
       <div className="grid gap-4 sm:grid-cols-2">
         <NumberField
           id="entryGraceMinutes"
@@ -335,23 +340,17 @@ function GraceStep({
           min={0}
           suffix="minutes"
         />
-        <OptionalNumberField
+        <NumberField
           id="paidExitGraceMinutes"
-          label="Time allowed to exit after payment"
-          description="Additional parking fees may apply after this period."
+          label="Exit grace after payment"
+          description="Customers must complete exit within this period after payment."
           value={rules.paidExitGraceMinutes}
           onChange={(value) => onChange({ ...rules, paidExitGraceMinutes: value })}
+          min={0}
+          max={720}
           suffix="minutes"
         />
       </div>
-      <ToggleSection
-        checked={dailyMaxEnabled}
-        title="Daily maximum"
-        description="Cap the time-based charge per 24-hour span."
-        onChange={onDailyMaxEnabled}
-      >
-        <MoneyField id="dailyMax" label="Daily maximum amount" currency={rules.currency} value={rules.dailyMax === '' ? 0 : rules.dailyMax} onChange={(value) => onChange({ ...rules, dailyMax: value })} />
-      </ToggleSection>
     </section>
   );
 }
@@ -401,27 +400,37 @@ function AdditionalFeesStep({
   );
 }
 
-function AvailabilityStep() {
+function AvailabilityStep({ isEditingVersion }: { isEditingVersion: boolean }) {
   return (
     <section className="space-y-4">
-      <SectionTitle title="Availability" description="Rate-plan versions become active immediately after saving." />
+      <SectionTitle
+        title="Availability"
+        description={isEditingVersion
+          ? 'Confirm how the reviewed pricing revision will be introduced.'
+          : 'Confirm when the first pricing revision will become available.'}
+      />
       <Alert tone="info">
-        Review the pricing details carefully before saving. Changes take effect as soon as the rate plan is created or a new version is added.
+        Publishing creates an immutable pricing revision effective immediately for new parking sessions. Existing sessions keep their pinned revision and pricing.
       </Alert>
       <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <Clock className="h-4 w-4 text-slate-400" />
-          Effective immediately after save
+          Effective immediately for new sessions
         </div>
       </div>
     </section>
   );
 }
 
-function ReviewStep({ name, description, rules }: { name: string; description: string; rules: RateRulesForm }) {
+function ReviewStep({ isEditingVersion, name, description, rules }: { isEditingVersion: boolean; name: string; description: string; rules: RateRulesForm }) {
   return (
     <section className="space-y-4">
-      <SectionTitle title="Review and create" description="Confirm the important operator-facing details before saving." />
+      <SectionTitle
+        title={isEditingVersion ? 'Review and publish' : 'Review and create'}
+        description={isEditingVersion
+          ? 'Confirm the changes before publishing a new pricing revision.'
+          : 'Confirm the important operator-facing details before publishing the first revision.'}
+      />
       <dl className="grid gap-3 sm:grid-cols-2">
         <ReviewItem label="Rate plan" value={name || 'Not named'} />
         <ReviewItem label="Description" value={description || 'Not described'} />
@@ -476,18 +485,6 @@ function NumberField({ id, label, value, onChange, prefix, suffix, min, max, des
       <div className="flex rounded-lg ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-brand-500">
         {prefix && <span className="flex items-center border-r border-slate-200 px-3 text-sm text-slate-500">{prefix}</span>}
         <Input id={id} type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} className="rounded-none ring-0 focus-visible:ring-0" required />
-        {suffix && <span className="flex items-center border-l border-slate-200 px-3 text-sm text-slate-500">{suffix}</span>}
-      </div>
-    </FormField>
-  );
-}
-
-function OptionalNumberField({ id, label, value, onChange, suffix, description }: { id: string; label: string; value: number | ''; onChange: (value: number | '') => void; suffix?: string; description?: string }) {
-  return (
-    <FormField label={label} htmlFor={id}>
-      {description && <p className="mb-1 text-sm text-slate-500">{description}</p>}
-      <div className="flex rounded-lg ring-1 ring-slate-300 focus-within:ring-2 focus-within:ring-brand-500">
-        <Input id={id} type="number" min={0} value={value} onChange={(event) => onChange(event.target.value === '' ? '' : Number(event.target.value))} className="rounded-none ring-0 focus-visible:ring-0" placeholder="Enter minutes" />
         {suffix && <span className="flex items-center border-l border-slate-200 px-3 text-sm text-slate-500">{suffix}</span>}
       </div>
     </FormField>

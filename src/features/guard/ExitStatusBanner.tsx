@@ -12,7 +12,11 @@ const styles: Record<ExitStatus['decision'], { box: string; title: string; icon:
 };
 
 export function ExitStatusBanner({ status }: { status: ExitStatus }) {
-  const s = styles[status.decision];
+  // The session status is authoritative for an expired paid window. Keep the
+  // banner from appearing as PAID if an older payment covered the prior window
+  // but the session now requires another payment before exit.
+  const isOverdue = status.status === 'OverstayDue';
+  const s = isOverdue ? styles.AdditionalPaymentRequired : styles[status.decision];
   const Icon = s.icon;
   return (
     <div className={cn('rounded-xl px-6 py-6 shadow-sm ring-1', s.box)}>
@@ -43,11 +47,16 @@ export function ExitStatusBanner({ status }: { status: ExitStatus }) {
         )}
         {status.paidExitDeadline && (
           <>
-            <dt className="text-slate-500">{status.decision === 'Paid' ? 'Exit before' : 'Exit deadline'}</dt>
-            <dd className="text-right font-semibold text-slate-900">{status.decision === 'Paid' ? formatTime(status.paidExitDeadline) : formatDateTime(status.paidExitDeadline)}</dd>
+            <dt className="text-slate-500">{!isOverdue && status.decision === 'Paid' ? 'Exit before' : 'Exit deadline'}</dt>
+            <dd className="text-right font-semibold text-slate-900">{!isOverdue && status.decision === 'Paid' ? formatTime(status.paidExitDeadline) : formatDateTime(status.paidExitDeadline)}</dd>
           </>
         )}
       </dl>
+      {isOverdue && (
+        <p className="mx-auto mt-4 max-w-sm text-center text-sm font-medium text-amber-900">
+          The paid exit window has expired. Additional payment is required before this vehicle can exit.
+        </p>
+      )}
     </div>
   );
 }

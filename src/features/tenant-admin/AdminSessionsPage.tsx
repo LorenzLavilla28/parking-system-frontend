@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { CarFront, CircleDollarSign, Search, ToggleRight } from 'lucide-react';
+import { CarFront, CircleDollarSign, QrCode, Search, ToggleRight } from 'lucide-react';
 import { adminApi } from './api';
 import { sessionStatusView } from '@/features/guard/sessionStatus';
 import { useSessionRealtime } from '@/lib/realtime/useSessionRealtime';
@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, THead, TBody, Th, Td } from '@/components/ui/Table';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
 import { formatMoney, formatDateTime } from '@/lib/format';
+import { SessionQrCard } from '@/features/guard/SessionQrCard';
 
 export function AdminSessionsPage() {
   const [params, setParams] = useSearchParams();
@@ -23,6 +24,7 @@ export function AdminSessionsPage() {
   const [plate, setPlate] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [activeOnly, setActiveOnly] = useState(true);
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const locationId = params.get('locationId') ?? '';
   const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations() });
 
@@ -134,6 +136,7 @@ export function AdminSessionsPage() {
               <Th>Entry</Th>
               <Th>Paid</Th>
               <Th>Status</Th>
+              <Th>Action</Th>
             </tr>
           </THead>
           <TBody>
@@ -149,12 +152,14 @@ export function AdminSessionsPage() {
                   <Td>
                     <Badge tone={view.tone}>{view.label}</Badge>
                   </Td>
+                  <Td><Button type="button" size="sm" variant="ghost" onClick={() => setQrSessionId((current) => current === s.id ? null : s.id)}><QrCode className="h-3.5 w-3.5" />{qrSessionId === s.id ? 'Hide QR' : 'Show QR'}</Button></Td>
                 </tr>
               );
             })}
           </TBody>
         </Table>
       )}
+      {qrSessionId && <SessionQrCard sessionId={qrSessionId} onClose={() => setQrSessionId(null)} />}
     </div>
   );
 }

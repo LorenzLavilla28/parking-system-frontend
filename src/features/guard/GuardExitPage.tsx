@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, QrCode, RotateCw, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, QrCode, RotateCw, Search } from 'lucide-react';
 import { guardApi } from './api';
 import { useGuardLocations } from './useGuardLocations';
 import { ExitStatusBanner } from './ExitStatusBanner';
@@ -11,10 +11,11 @@ import { LiveIndicator } from '@/components/ui/LiveIndicator';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Alert } from '@/components/ui/Alert';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/states';
-import { formatMoney, formatTime } from '@/lib/format';
+import { elapsedSince, formatDateTime, formatMoney, formatTime } from '@/lib/format';
 
 export function GuardExitPage() {
   const { selectedId, selected } = useGuardLocations();
@@ -34,7 +35,7 @@ export function GuardExitPage() {
 
   const search = useQuery({
     queryKey: ['exit-search', selectedId, plate],
-    queryFn: () => guardApi.searchSessions({ locationId: selectedId ?? undefined, plate, activeOnly: true }),
+    queryFn: () => guardApi.searchSessions({ locationId: selectedId ?? undefined, plate: normalizePlateForSearch(plate), activeOnly: true }),
     enabled: false,
   });
 
@@ -109,46 +110,88 @@ export function GuardExitPage() {
       />
 
       {!sessionId && (
-        <Card className="p-4">
-          <form
-            className="flex flex-wrap gap-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              search.refetch();
-            }}
-          >
-            <Input
-              value={plate}
-              onChange={(event) => setPlate(event.target.value.toUpperCase())}
-              placeholder="Search by plate"
-              autoFocus
-              className="max-w-xs"
-            />
-            <Button type="submit" loading={search.isFetching}>
-              <Search className="h-4 w-4" />
-              Search
-            </Button>
-          </form>
+        <div className="space-y-4">
+          <Card className="p-4">
+            <form
+              className="flex flex-col gap-3 sm:flex-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                search.refetch();
+              }}
+            >
+              <Input
+                value={plate}
+                onChange={(event) => setPlate(event.target.value.toUpperCase())}
+                placeholder="Search by plate"
+                autoFocus
+                className="w-full sm:max-w-sm"
+                aria-label="Search by plate"
+              />
+              <Button type="submit" loading={search.isFetching}>
+                <Search className="h-4 w-4" />
+                Search
+              </Button>
+            </form>
+          </Card>
 
-          {search.data && search.data.items.length === 0 && (
-            <p className="mt-3 text-sm text-slate-500">No active session found for that plate.</p>
+          {search.data && (
+            <section className="rounded-xl bg-slate-50/90 p-4 ring-1 ring-slate-200">
+              <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Search results</p>
+                  <p className="mt-1 text-sm text-slate-700">
+                    {search.data.items.length === 1 ? '1 vehicle found' : `${search.data.items.length} vehicles found`} for <span className="font-semibold text-slate-950">“{plate.trim()}”</span>
+                  </p>
+                </div>
+                <Badge tone="blue">{search.data.items.length} {search.data.items.length === 1 ? 'result' : 'results'}</Badge>
+              </div>
+
+              {search.data.items.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">No active vehicle was found for this plate.</p>
+              ) : (
+                <ul className="mt-4 space-y-3">
+                  {search.data.items.map((session) => {
+                    const payment = paymentView(session.status, session.outstanding, session.totalPaid);
+                    return (
+                      <li key={session.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectSession(session.id)}
+                          className="group w-full rounded-lg bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-brand-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-lg font-extrabold tracking-tight text-slate-950">{session.plateNumberRaw}</p>
+                              <p className="mt-1 text-sm text-slate-600">
+                                {session.vehicleType} <span className="text-slate-400">·</span> Entered {formatTime(session.entryTime)} <span className="text-slate-400">·</span> Parked for {elapsedSince(session.entryTime)}
+                              </p>
+                              <p className="mt-2 text-xs text-slate-500">{formatDateTime(session.entryTime).replace(' at ', ' · ')}</p>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
+                              <Badge tone={payment.tone}>{payment.label}</Badge>
+                              <div className="text-left sm:text-right">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Amount due</p>
+                                <p className={`mt-0.5 text-lg font-bold ${session.pricingAvailable ? 'text-slate-950' : 'text-slate-500'}`}>
+                                  {session.pricingAvailable ? formatMoney(session.outstanding, session.currency) : 'Unavailable'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+                            <span className="inline-flex items-center gap-1 text-sm font-bold text-brand-700 group-hover:text-brand-900">
+                              Review exit
+                              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                            </span>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           )}
-          {search.data && search.data.items.length > 0 && (
-            <ul className="mt-3 divide-y divide-slate-100">
-              {search.data.items.map((session) => (
-                <li key={session.id}>
-                  <button
-                    onClick={() => selectSession(session.id)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-3 text-left hover:bg-slate-50"
-                  >
-                    <span className="font-semibold text-slate-900">{session.plateNumberRaw}</span>
-                    <span className="text-sm text-slate-500">{session.vehicleType}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        </div>
       )}
 
       {sessionId && status.isLoading && <LoadingState />}
@@ -183,6 +226,10 @@ export function GuardExitPage() {
                 </Card>
               )}
 
+              {status.data.status === 'OverstayDue' && (
+                <Alert tone="error">This session is overdue. Exit approval is unavailable until the outstanding balance is paid.</Alert>
+              )}
+
               {selected?.allowCashPayment && (
                 <CashPaymentForm
                   sessionId={sessionId!}
@@ -195,7 +242,7 @@ export function GuardExitPage() {
                 />
               )}
 
-              <details className="rounded-lg bg-white/75 p-4 ring-1 ring-slate-200">
+              {status.data.status !== 'OverstayDue' && <details className="rounded-lg bg-white/75 p-4 ring-1 ring-slate-200">
                 <summary className="cursor-pointer text-sm font-semibold text-slate-700">
                   Supervisor override
                 </summary>
@@ -216,7 +263,7 @@ export function GuardExitPage() {
                     Force approve exit
                   </Button>
                 </div>
-              </details>
+              </details>}
             </div>
           ) : (
             <EmptyState>This session is closed.</EmptyState>
@@ -239,4 +286,16 @@ export function GuardExitPage() {
       {!selectedId && <Alert tone="info">Select a location to begin.</Alert>}
     </div>
   );
+}
+
+function normalizePlateForSearch(value: string) {
+  return value.toUpperCase().replace(/[\s-]+/g, '');
+}
+
+function paymentView(status: string, outstanding: number, totalPaid: number): { label: string; tone: 'green' | 'amber' | 'red' } {
+  if (status === 'PaymentPending') return { label: 'Payment pending', tone: 'red' };
+  if (status === 'OverstayDue') return { label: 'Overstay due', tone: 'red' };
+  if (outstanding > 0) return { label: 'Unpaid', tone: 'amber' };
+  if (totalPaid > 0) return { label: 'Paid', tone: 'green' };
+  return { label: 'No payment due', tone: 'green' };
 }

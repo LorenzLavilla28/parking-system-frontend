@@ -7,6 +7,7 @@ interface MetricCardProps {
   detail?: string;
   tone?: 'blue' | 'green' | 'amber' | 'slate';
   icon?: ComponentType<{ className?: string }>;
+  iconSize?: 'default' | 'subtle';
 }
 
 const tones = {
@@ -16,12 +17,16 @@ const tones = {
   slate: 'bg-slate-50 text-slate-700 ring-slate-100',
 };
 
-export function MetricCard({ label, value, detail, tone = 'slate', icon: Icon }: MetricCardProps) {
+export function MetricCard({ label, value, detail, tone = 'slate', icon: Icon, iconSize = 'default' }: MetricCardProps) {
   return (
     <div className="rounded-lg bg-white/95 p-4 shadow-sm ring-1 ring-slate-200/80">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-slate-500">{label}</p>
-        <span className={cn('flex h-9 w-9 items-center justify-center rounded-lg ring-1', tones[tone])} aria-hidden="true">
+        <span className={cn(
+          'flex items-center justify-center rounded-lg ring-1',
+          iconSize === 'subtle' ? 'h-7 w-7 opacity-70' : 'h-9 w-9',
+          tones[tone],
+        )} aria-hidden="true">
           {Icon ? <Icon className="h-4 w-4" /> : <span className="h-2.5 w-2.5 rounded-full bg-current" />}
         </span>
       </div>

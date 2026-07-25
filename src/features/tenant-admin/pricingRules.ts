@@ -16,8 +16,7 @@ export interface RateBlockForm {
 export interface RateRulesForm {
   currency: string;
   entryGraceMinutes: number;
-  paidExitGraceMinutes: number | '';
-  dailyMax: number | '';
+  paidExitGraceMinutes: number;
   lostTicketFee: number | '';
   enableOvernight: boolean;
   overnightFee: number;
@@ -31,11 +30,10 @@ export interface RateRulesForm {
 export interface PricingRulesJson {
   currency: string;
   entryGraceMinutes: number;
-  paidExitGraceMinutes?: number | null;
+  paidExitGraceMinutes: number;
   default: PricingRuleBlockJson;
   weekendMultiplier?: number;
   holidayMultiplier?: number;
-  dailyMax?: number;
   overnight?: {
     fee: number;
     startHour: number;
@@ -78,8 +76,7 @@ const defaultRate: RateBlockForm = {
 export const DEFAULT_RATE_RULES_FORM: RateRulesForm = {
   currency: 'PHP',
   entryGraceMinutes: 15,
-  paidExitGraceMinutes: '',
-  dailyMax: 250,
+  paidExitGraceMinutes: 15,
   lostTicketFee: 500,
   enableOvernight: true,
   overnightFee: 80,
@@ -133,8 +130,7 @@ export function parseRateRulesJson(rulesJson?: string): RateRulesForm {
     return {
       currency: String(parsed.currency ?? DEFAULT_RATE_RULES_FORM.currency),
       entryGraceMinutes: Number(parsed.entryGraceMinutes ?? DEFAULT_RATE_RULES_FORM.entryGraceMinutes),
-      paidExitGraceMinutes: toNumberOrEmpty(parsed.paidExitGraceMinutes),
-      dailyMax: toNumberOrEmpty(parsed.dailyMax),
+      paidExitGraceMinutes: Number(parsed.paidExitGraceMinutes ?? DEFAULT_RATE_RULES_FORM.paidExitGraceMinutes),
       lostTicketFee: toNumberOrEmpty(parsed.lostTicketFee),
       enableOvernight: Boolean(overnight),
       overnightFee: Number(overnight?.fee ?? DEFAULT_RATE_RULES_FORM.overnightFee),
@@ -153,13 +149,12 @@ export function buildPricingRules(form: RateRulesForm): PricingRulesJson {
   const rules: PricingRulesJson = {
     currency: form.currency,
     entryGraceMinutes: form.entryGraceMinutes,
-    paidExitGraceMinutes: form.paidExitGraceMinutes === '' ? null : form.paidExitGraceMinutes,
+    paidExitGraceMinutes: form.paidExitGraceMinutes,
     default: buildRateBlock(form.defaultRate),
   };
 
   if (form.weekendMultiplier !== '') rules.weekendMultiplier = form.weekendMultiplier;
   if (form.holidayMultiplier !== '') rules.holidayMultiplier = form.holidayMultiplier;
-  if (form.dailyMax !== '') rules.dailyMax = form.dailyMax;
   if (form.lostTicketFee !== '') rules.lostTicketFee = form.lostTicketFee;
   if (form.enableOvernight) {
     rules.overnight = {
@@ -184,9 +179,8 @@ export function describeRateRules(form: RateRulesForm) {
       : rate.type === 'PerUnit'
         ? `${formatPeso(rate.perUnitAmount)} per ${rate.perUnit.toLowerCase()}`
         : `${formatPeso(rate.firstAmount)} for first ${rate.firstHours} hours, then ${formatPeso(rate.incrementAmount)} per ${rate.incrementUnit.toLowerCase()}`;
-  const cap = form.dailyMax === '' ? 'no daily cap' : `${formatPeso(form.dailyMax)} daily cap`;
-  const grace = `${form.entryGraceMinutes} min entry grace`;
-  return `${base}; ${cap}; ${grace}.`;
+  const grace = `${form.entryGraceMinutes} min entry grace; ${form.paidExitGraceMinutes} min paid-exit grace`;
+  return `${base}; ${grace}.`;
 }
 
 function buildRateBlock(rate: RateBlockForm): PricingRuleBlockJson {
