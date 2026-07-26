@@ -29,6 +29,7 @@ export function PaymentStatusPage() {
     );
   }
   if (status.isError) return <ErrorState error={status.error} />;
+  if (!status.data) return <ErrorState error={new Error('The payment status response did not contain any data.')} />;
 
   const s = status.data!;
   const pending = PENDING.has(s.status);

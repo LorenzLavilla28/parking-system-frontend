@@ -282,12 +282,25 @@ function LocationModal({
     onSuccess: onSaved,
   });
 
+  const capacityLimit = quota?.effectiveMaximumSlotsPerLocation ?? null;
+  const capacityAllowanceKnown = quota !== undefined;
+  const capacityExceedsLimit = capacityAllowanceKnown && capacityLimit !== null && form.slotCapacity > capacityLimit;
+  const capacityInvalid = form.slotCapacity < 1 || capacityExceedsLimit;
+  const saveDisabled = save.isPending || !capacityAllowanceKnown || capacityInvalid;
+
+  const capacityLedger = !quota
+    ? 'Checking the platform-approved capacity allowance...'
+    : capacityLimit === null
+      ? `${quota.subscriptionPlan} uses platform-managed capacity. No automatic slot cap is enforced for this tenant.`
+      : `${quota.subscriptionPlan} plan: ${quota.maximumSlotsPerLocation ?? 0} slots${quota.additionalSlotCapacity > 0 ? ` + ${quota.additionalSlotCapacity} platform-approved add-on slots` : ''} = ${capacityLimit} slots per location.`;
+
   return (
     <Modal open onClose={onClose} title={isNew ? 'New location' : 'Edit location'} size="lg">
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault();
+          if (saveDisabled) return;
           save.mutate();
         }}
       >
@@ -321,15 +334,18 @@ function LocationModal({
             id="slot-capacity"
             type="number"
             min={1}
+            max={capacityLimit ?? undefined}
             value={form.slotCapacity}
             onChange={(e) => setForm({ ...form, slotCapacity: Number(e.target.value) })}
             required
           />
-          <p className="text-sm text-slate-500">
-            {quota?.effectiveMaximumSlotsPerLocation == null
-              ? 'Your custom plan manages capacity separately.'
-              : `${quota.subscriptionPlan} allows up to ${quota.effectiveMaximumSlotsPerLocation} slots per location${quota.additionalSlotCapacity > 0 ? `, including ${quota.additionalSlotCapacity} add-on slots` : ''}.`}
-          </p>
+          <div className={`rounded-lg px-3 py-2 text-sm ring-1 ${capacityExceedsLimit ? 'bg-red-50 text-red-800 ring-red-200' : 'bg-blue-50 text-blue-900 ring-blue-100'}`}>
+            <p className="font-semibold">Capacity allowance</p>
+            <p className="mt-0.5">{capacityLedger}</p>
+            {capacityExceedsLimit && (
+              <p className="mt-1 font-semibold">Reduce the capacity to {capacityLimit} or ask the platform administrator to approve more capacity.</p>
+            )}
+          </div>
         </FormField>
         <label className="flex items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
           <input
@@ -363,7 +379,7 @@ function LocationModal({
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" loading={save.isPending}>
+          <Button type="submit" loading={save.isPending} disabled={saveDisabled}>
             Save
           </Button>
         </div>

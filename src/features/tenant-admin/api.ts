@@ -41,6 +41,15 @@ export interface LocationQuota {
   effectiveMaximumSlotsPerLocation: number | null;
 }
 
+export interface PayMongoConnection {
+  environment: string;
+  status: string;
+  payMongoAccountId: string | null;
+  lastValidatedAt: string | null;
+  lastError: string | null;
+  webhookUrl: string | null;
+}
+
 // ---- Users -----------------------------------------------------------------
 export interface User {
   id: string;
@@ -283,6 +292,17 @@ export const adminApi = {
     api.get<OperationsSummary>('/api/tenant/reports/operations-summary', { params: { hours } }),
   sendOperationsSummaryEmail: (hours = 3) =>
     api.post<OperationsSummaryEmailResponse>('/api/tenant/reports/operations-summary/email', undefined, { params: { hours } }),
+
+  // Tenant-owned payment credentials
+  getPayMongoConnections: () => api.get<PayMongoConnection[]>('/api/tenant/payments/paymongo'),
+  connectPayMongo: (body: {
+    environment: string;
+    secretKey: string;
+    webhookSecret: string;
+    payMongoAccountId?: string;
+  }) => api.post<PayMongoConnection>('/api/tenant/payments/paymongo/connect', body),
+  disconnectPayMongo: (environment: string) =>
+    api.post<PayMongoConnection>('/api/tenant/payments/paymongo/disconnect', undefined, { params: { environment } }),
 
   // Locations
   listLocations: (q?: PageQuery) => api.get<PagedResult<Location>>('/api/tenant/locations', { params: q }),

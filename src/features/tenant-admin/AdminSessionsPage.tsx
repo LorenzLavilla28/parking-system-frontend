@@ -135,6 +135,7 @@ export function AdminSessionsPage() {
               <Th>Vehicle</Th>
               <Th>Entry</Th>
               <Th>Paid</Th>
+              <Th>Amount due</Th>
               <Th>Status</Th>
               <Th>Action</Th>
             </tr>
@@ -148,7 +149,10 @@ export function AdminSessionsPage() {
                   <Td>{s.locationName ?? locations.data?.items.find((location) => location.id === s.parkingLocationId)?.name ?? 'Unknown location'}</Td>
                   <Td>{s.vehicleType}</Td>
                   <Td>{formatDateTime(s.entryTime)}</Td>
-                  <Td>{formatMoney(s.totalPaid)}</Td>
+                  <Td>{formatMoney(s.totalPaid, s.currency)}</Td>
+                  <Td className={`font-semibold tabular-nums ${s.outstanding > 0 ? 'text-amber-700' : 'text-slate-500'}`}>
+                    {s.pricingAvailable ? formatMoney(s.outstanding, s.currency) : '-'}
+                  </Td>
                   <Td>
                     <Badge tone={view.tone}>{view.label}</Badge>
                   </Td>

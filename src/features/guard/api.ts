@@ -93,7 +93,7 @@ export interface RecordEntryInput {
 export const guardApi = {
   locations: () => api.get<GuardLocation[]>('/api/guard/locations'),
   recordEntry: (body: RecordEntryInput) => api.post<EntryTicket>('/api/guard/entries', body),
-  searchSessions: (params: { plate?: string; locationId?: string; activeOnly?: boolean; page?: number }) =>
+  searchSessions: (params: { plate?: string; locationId?: string; activeOnly?: boolean; page?: number; pageSize?: number }) =>
     api.get<PagedResult<SessionSummary>>('/api/guard/sessions', { params }),
   getSession: (id: string) => api.get<SessionSummary>(`/api/guard/sessions/${id}`),
   getQr: (id: string) => api.post<SessionQr>(`/api/guard/sessions/${id}/qr`),

@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   MapPin,
   ReceiptText,
+  Settings,
   ShieldCheck,
   Ticket,
   Users,
@@ -90,6 +91,7 @@ export const workspaces: WorkspaceDefinition[] = [
         items: [
           { label: 'Users', to: '/admin/users', icon: Users },
           { label: 'Rate plans', to: '/admin/rate-plans', icon: ReceiptText },
+          { label: 'Payment settings', to: '/admin/settings/payments', icon: Settings },
         ],
       },
       {

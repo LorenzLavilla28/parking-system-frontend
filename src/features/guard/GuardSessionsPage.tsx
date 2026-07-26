@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ClipboardCheck, QrCode, Search, X } from 'lucide-react';
@@ -18,6 +18,7 @@ import { formatMoney, elapsedSince } from '@/lib/format';
 import { SessionQrCard } from './SessionQrCard';
 
 type SessionFilter = 'all' | 'paid' | 'unpaid' | 'overstay';
+const PAGE_SIZE = 10;
 
 export function GuardSessionsPage() {
   const { selectedId, selected } = useGuardLocations();
@@ -28,6 +29,7 @@ export function GuardSessionsPage() {
   const [submitted, setSubmitted] = useState('');
   const [statusFilter, setStatusFilter] = useState<SessionFilter>('all');
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const sessions = useQuery({
     queryKey: ['guard-sessions', selectedId, submitted],
@@ -36,6 +38,10 @@ export function GuardSessionsPage() {
         locationId: selectedId ?? undefined,
         plate: submitted || undefined,
         activeOnly: true,
+        // Keep filter counts and client-side status filtering consistent, then
+        // paginate the guard's sorted view at 10 records per page.
+        page: 1,
+        pageSize: 200,
       }),
     enabled: !!selectedId,
   });
@@ -47,6 +53,21 @@ export function GuardSessionsPage() {
       .sort((a, b) => urgencyRank(a.status) - urgencyRank(b.status) || b.entryTime.localeCompare(a.entryTime)),
     [items, statusFilter],
   );
+  const totalPages = Math.max(1, Math.ceil(visibleSessions.length / PAGE_SIZE));
+  const pagedSessions = useMemo(
+    () => visibleSessions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [page, visibleSessions],
+  );
+
+  useEffect(() => {
+    setPage(1);
+    setQrSessionId(null);
+  }, [selectedId, submitted, statusFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage((current) => Math.min(current, totalPages));
+    if (qrSessionId && !pagedSessions.some((session) => session.id === qrSessionId)) setQrSessionId(null);
+  }, [page, pagedSessions, qrSessionId, totalPages]);
 
   const clearSearch = () => {
     setPlate('');
@@ -123,26 +144,51 @@ export function GuardSessionsPage() {
       {sessions.isError && <ErrorState error={sessions.error} />}
       {sessions.data && visibleSessions.length === 0 && <EmptyState>{statusFilter === 'all' ? 'No active sessions.' : 'No sessions match this filter.'}</EmptyState>}
 
-      {visibleSessions.length > 0 && (
+      {pagedSessions.length > 0 && (
         <>
           <div className="space-y-3 md:hidden">
-            {visibleSessions.map((session) => (
+            {pagedSessions.map((session) => (
               <MobileSessionCard key={session.id} session={session} qrSessionId={qrSessionId} onToggleQr={setQrSessionId} />
             ))}
           </div>
 
           <div className="hidden md:block">
-            <DesktopSessionTable sessions={visibleSessions} qrSessionId={qrSessionId} onToggleQr={setQrSessionId} />
+            <DesktopSessionTable sessions={pagedSessions} qrSessionId={qrSessionId} onToggleQr={setQrSessionId} />
           </div>
         </>
       )}
 
-      {qrSessionId && <SessionQrCard sessionId={qrSessionId} onClose={() => setQrSessionId(null)} />}
+      {visibleSessions.length > 0 && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, visibleSessions.length)} of {visibleSessions.length} sessions
+          </p>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={page <= 1}
+              onClick={() => { setPage((current) => Math.max(1, current - 1)); setQrSessionId(null); }}
+            >
+              Previous
+            </Button>
+            <span className="flex items-center px-1 text-sm text-slate-500">Page {page} of {totalPages}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={page >= totalPages}
+              onClick={() => { setPage((current) => Math.min(totalPages, current + 1)); setQrSessionId(null); }}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: SessionSummary[]; qrSessionId: string | null; onToggleQr: (id: string) => void }) {
+function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: SessionSummary[]; qrSessionId: string | null; onToggleQr: (id: string | null) => void }) {
   return (
     <Table>
       <THead>
@@ -161,6 +207,7 @@ function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: 
         {sessions.map((session) => {
           const view = sessionStatusView(session.status);
           return (
+            <Fragment key={session.id}>
             <tr key={session.id}>
               <Td className="py-2.5 font-mono font-bold tracking-wide text-slate-950">{session.plateNumberRaw}</Td>
               <Td className="py-2.5">{session.vehicleType}{session.vehicleColor ? ` - ${session.vehicleColor}` : ''}</Td>
@@ -175,6 +222,14 @@ function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: 
                 <SessionActions session={session} qrSessionId={qrSessionId} onToggleQr={onToggleQr} />
               </Td>
             </tr>
+            {qrSessionId === session.id && (
+              <tr key={`${session.id}-qr`}>
+                <td colSpan={8} className="bg-slate-50/80 p-3">
+                  <SessionQrCard sessionId={session.id} onClose={() => onToggleQr(null)} />
+                </td>
+              </tr>
+            )}
+            </Fragment>
           );
         })}
       </TBody>
@@ -182,7 +237,7 @@ function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: 
   );
 }
 
-function MobileSessionCard({ session, qrSessionId, onToggleQr }: { session: SessionSummary; qrSessionId: string | null; onToggleQr: (id: string) => void }) {
+function MobileSessionCard({ session, qrSessionId, onToggleQr }: { session: SessionSummary; qrSessionId: string | null; onToggleQr: (id: string | null) => void }) {
   const view = sessionStatusView(session.status);
   const isOverstay = session.status === 'OverstayDue';
 
@@ -217,16 +272,17 @@ function MobileSessionCard({ session, qrSessionId, onToggleQr }: { session: Sess
           {isOverstay ? 'Review and validate exit' : 'Validate exit'}
           <ArrowRight className="h-4 w-4" />
         </Link>
-        <Button type="button" size="lg" variant="secondary" fullWidth className="h-12" onClick={() => onToggleQr(qrSessionId === session.id ? '' : session.id)}>
+        <Button type="button" size="lg" variant="secondary" fullWidth className="h-12" onClick={() => onToggleQr(qrSessionId === session.id ? null : session.id)}>
           <QrCode className="h-4 w-4" />
           {qrSessionId === session.id ? 'Hide QR' : 'Show QR'}
         </Button>
       </div>
+      {qrSessionId === session.id && <div className="mt-4"><SessionQrCard sessionId={session.id} onClose={() => onToggleQr(null)} /></div>}
     </article>
   );
 }
 
-function SessionActions({ session, qrSessionId, onToggleQr }: { session: SessionSummary; qrSessionId: string | null; onToggleQr: (id: string) => void }) {
+function SessionActions({ session, qrSessionId, onToggleQr }: { session: SessionSummary; qrSessionId: string | null; onToggleQr: (id: string | null) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
       <Link to={`/guard/exit?session=${session.id}`} className={buttonClasses({ variant: 'secondary', size: 'sm', className: 'text-brand-700 ring-brand-200 hover:bg-brand-50' })}>
@@ -234,7 +290,7 @@ function SessionActions({ session, qrSessionId, onToggleQr }: { session: Session
         Validate exit
         <ArrowRight className="h-3.5 w-3.5" />
       </Link>
-      <Button type="button" size="sm" variant="ghost" onClick={() => onToggleQr(qrSessionId === session.id ? '' : session.id)}>
+      <Button type="button" size="sm" variant="ghost" onClick={() => onToggleQr(qrSessionId === session.id ? null : session.id)}>
         <QrCode className="h-3.5 w-3.5" />
         {qrSessionId === session.id ? 'Hide QR' : 'Show QR'}
       </Button>

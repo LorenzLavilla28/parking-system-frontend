@@ -24,6 +24,7 @@ const RatePlanBuilderPage = lazy(() => import('@/features/tenant-admin/RatePlanB
 const AdminSessionsPage = lazy(() => import('@/features/tenant-admin/AdminSessionsPage').then((m) => ({ default: m.AdminSessionsPage })));
 const PaymentsPage = lazy(() => import('@/features/tenant-admin/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
 const ReportsPage = lazy(() => import('@/features/tenant-admin/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const PaymentSettingsPage = lazy(() => import('@/features/tenant-admin/PaymentSettingsPage').then((m) => ({ default: m.PaymentSettingsPage })));
 
 const GuardEntryPage = lazy(() => import('@/features/guard/GuardEntryPage').then((m) => ({ default: m.GuardEntryPage })));
 const GuardSessionsPage = lazy(() => import('@/features/guard/GuardSessionsPage').then((m) => ({ default: m.GuardSessionsPage })));
@@ -77,6 +78,7 @@ export const router = createBrowserRouter([
         path: 'reports',
         element: <ReportsPage />,
       },
+      { path: 'settings/payments', element: <PaymentSettingsPage /> },
     ],
   },
 

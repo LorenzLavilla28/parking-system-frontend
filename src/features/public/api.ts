@@ -13,7 +13,9 @@ export interface PlateLookupResult {
 }
 
 export interface PublicSession {
-  maskedPlate: string;
+  /** Empty/null means the session cannot be safely verified for payment. */
+  plateNumber: string | null;
+  vehicleType: string;
   locationName: string;
   entryTime: string;
   status: string;
@@ -39,6 +41,8 @@ export interface CurrentFee {
   entryTime: string;
   calculationTime: string;
   breakdown: FeeBreakdownItem[];
+  onlinePaymentAvailable: boolean;
+  cashPaymentAvailable: boolean;
 }
 
 export interface FeeQuote {
