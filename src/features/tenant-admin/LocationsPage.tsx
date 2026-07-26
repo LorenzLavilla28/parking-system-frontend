@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, Banknote, CheckCircle2, Info, MapPin, Pencil, Plus, RotateCcw, Search, TimerReset } from 'lucide-react';
-import { adminApi, type Location, type LocationInput, type RatePlan } from './api';
+import { adminApi, type Location, type LocationInput, type LocationQuota, type RatePlan } from './api';
 import { slugify } from '@/lib/slug';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -230,6 +230,7 @@ export function LocationsPage() {
         <LocationModal
           location={editing === 'new' ? null : editing}
           ratePlans={(ratePlans.data?.items ?? []).filter((plan) => plan.status === 'Active')}
+          quota={locationQuota.data}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -244,11 +245,13 @@ export function LocationsPage() {
 function LocationModal({
   location,
   ratePlans,
+  quota,
   onClose,
   onSaved,
 }: {
   location: Location | null;
   ratePlans: RatePlan[];
+  quota?: LocationQuota;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -322,7 +325,11 @@ function LocationModal({
             onChange={(e) => setForm({ ...form, slotCapacity: Number(e.target.value) })}
             required
           />
-          <p className="text-sm text-slate-500">The tenant subscription determines the maximum allowed capacity.</p>
+          <p className="text-sm text-slate-500">
+            {quota?.effectiveMaximumSlotsPerLocation == null
+              ? 'Your custom plan manages capacity separately.'
+              : `${quota.subscriptionPlan} allows up to ${quota.effectiveMaximumSlotsPerLocation} slots per location${quota.additionalSlotCapacity > 0 ? `, including ${quota.additionalSlotCapacity} add-on slots` : ''}.`}
+          </p>
         </FormField>
         <label className="flex items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 ring-1 ring-slate-200">
           <input

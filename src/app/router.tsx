@@ -1,10 +1,11 @@
 import { lazy } from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { AppShell } from './layouts/AppShell';
 import { ProtectedRoute } from './ProtectedRoute';
 import { NotFoundPage } from './NotFoundPage';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { LandingPage } from '@/features/public/LandingPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
@@ -32,7 +33,7 @@ const PlatformTenantsPage = lazy(() => import('@/features/platform-admin/Platfor
 const PlatformHealthPage = lazy(() => import('@/features/platform-admin/PlatformHealthPage').then((m) => ({ default: m.PlatformHealthPage })));
 
 export const router = createBrowserRouter([
-  { index: true, element: <Navigate to="/login" replace /> },
+  { index: true, element: <LandingPage /> },
   { path: '/login', element: <LoginPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },

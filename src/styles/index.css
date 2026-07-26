@@ -32,8 +32,39 @@ body {
 
 .app-surface {
   background:
-    radial-gradient(circle at 12% 8%, rgba(29, 130, 216, 0.12), transparent 24rem),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f6 38%, #e8edf3 100%);
+    radial-gradient(circle at 10% 8%, rgba(29, 130, 216, 0.13), transparent 28rem),
+    radial-gradient(circle at 88% 88%, rgba(22, 163, 184, 0.08), transparent 24rem),
+    linear-gradient(180deg, #f8fbff 0%, #eef4f9 52%, #e8eff6 100%);
+}
+
+.auth-brand-panel {
+  background:
+    radial-gradient(circle at 84% 14%, rgba(22, 167, 216, 0.24), transparent 22rem),
+    linear-gradient(135deg, #050a2c 0%, #06104a 58%, #00116f 100%);
+}
+
+.parking-grid {
+  background-image:
+    linear-gradient(rgba(120, 190, 235, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 190, 235, 0.1) 1px, transparent 1px),
+    linear-gradient(120deg, transparent 48%, rgba(120, 190, 235, 0.08) 49%, rgba(120, 190, 235, 0.08) 51%, transparent 52%);
+  background-size: 44px 44px, 44px 44px, 88px 88px;
+  mask-image: linear-gradient(135deg, black, transparent 78%);
+}
+
+.auth-form-panel {
+  min-height: 550px;
+}
+
+.product-preview {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(140, 211, 245, 0.05));
+}
+
+.landing-page h1,
+.landing-page h2,
+.auth-brand-panel h1,
+.auth-form-panel h2 {
+  text-wrap: balance;
 }
 
 .glass-panel {
@@ -46,5 +77,37 @@ body {
   [role='button'],
   a.btn {
     min-height: 44px;
+  }
+}
+
+/* Entry tickets are the only printable artifact in the app. Keep the
+   application shell out of the printout and center a compact ticket instead. */
+@media print {
+  @page {
+    margin: 0.35in;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .print-ticket,
+  .print-ticket * {
+    visibility: visible !important;
+  }
+
+  .print-ticket {
+    position: absolute !important;
+    top: 0 !important;
+    left: 50% !important;
+    width: 2.85in !important;
+    max-width: calc(100vw - 0.7in) !important;
+    margin: 0 !important;
+    transform: translateX(-50%) !important;
   }
 }

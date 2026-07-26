@@ -47,15 +47,15 @@ export const workspaces: WorkspaceDefinition[] = [
   {
     id: 'platform',
     legacyKey: 'Platform',
-    label: 'Platform',
-    contextLabel: 'Platform control',
+    label: 'Platform Console',
+    contextLabel: 'Platform Console',
     defaultPath: '/platform',
     pathPrefix: '/platform',
     requiredRoles: ['PlatformAdministrator'],
     icon: Gauge,
     navigationGroups: [
       {
-        label: 'Platform',
+        label: 'Navigation',
         items: [
           { label: 'Tenants', to: '/platform', icon: Building2, end: true },
           { label: 'Health', to: '/platform/health', icon: HeartPulse },

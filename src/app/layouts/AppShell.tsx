@@ -8,7 +8,6 @@ import {
   MapPin,
   Menu,
   ParkingCircle,
-  UserCircle,
   X,
 } from 'lucide-react';
 import { useAuth, useLogout } from '@/features/auth/hooks';
@@ -65,7 +64,7 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
     <div
       className={cn(
         'app-surface min-h-screen lg:grid',
-        sidebarCollapsed ? 'lg:grid-cols-[4.5rem_minmax(0,1fr)]' : 'lg:grid-cols-[16rem_minmax(0,1fr)]',
+        sidebarCollapsed ? 'lg:grid-cols-[4.25rem_minmax(0,1fr)]' : 'lg:grid-cols-[15rem_minmax(0,1fr)]',
       )}
     >
       <DesktopSidebar
@@ -74,6 +73,9 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
         collapsed={sidebarCollapsed}
         groups={navigationGroups}
         pathname={location.pathname}
+        userName={user?.fullName || user?.email || 'Account'}
+        email={user?.email}
+        logout={logout}
         onCollapseChange={setSidebarCollapsed}
         onWorkspaceSelect={switchWorkspace}
       />
@@ -84,14 +86,8 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
           buttonRef={menuButtonRef}
           onOpenNavigation={() => setDrawerOpen(true)}
         />
-        <DesktopTopBar
-          activeWorkspace={activeWorkspace}
-          userName={user?.fullName || user?.email || 'Account'}
-          email={user?.email}
-          logout={logout}
-        />
 
-        <main className="w-full max-w-[1320px] scroll-pt-24 px-4 py-5 sm:px-5 lg:px-6 lg:py-7 xl:px-8">
+        <main className="w-full max-w-[1320px] scroll-pt-24 px-4 py-5 sm:px-5 lg:px-6 lg:py-6 xl:px-8">
           <Suspense fallback={<LoadingState />}>
             <Outlet />
           </Suspense>
@@ -125,6 +121,9 @@ function DesktopSidebar({
   collapsed,
   groups,
   pathname,
+  userName,
+  email,
+  logout,
   onCollapseChange,
   onWorkspaceSelect,
 }: {
@@ -133,48 +132,47 @@ function DesktopSidebar({
   collapsed: boolean;
   groups: NavigationGroup[];
   pathname: string;
+  userName: string;
+  email?: string;
+  logout: ReturnType<typeof useLogout>;
   onCollapseChange: (collapsed: boolean) => void;
   onWorkspaceSelect: (workspace: WorkspaceDefinition) => void;
 }) {
   return (
     <aside className="sticky top-0 z-40 hidden h-screen min-h-0 border-r border-slate-200/80 bg-white/92 shadow-sm lg:flex lg:flex-col">
-      <div className={cn('border-b border-slate-100', collapsed ? 'p-3' : 'p-4')}>
+      <div className={cn('border-b border-slate-100', collapsed ? 'p-2.5' : 'p-3')}>
         <Link
           to={activeWorkspace.defaultPath}
-          className={cn('flex items-center gap-3 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500', collapsed && 'justify-center')}
+          className={cn('flex items-center gap-2.5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500', collapsed && 'justify-center')}
           aria-label="ParkingSaaS home"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-900 text-white shadow-sm">
-            <ParkingCircle className="h-6 w-6" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-900 text-white shadow-sm">
+            <ParkingCircle className="h-5 w-5" />
           </span>
           {!collapsed && (
             <span className="min-w-0">
-              <span className="block truncate text-sm font-bold leading-4 text-slate-950">ParkingSaaS</span>
+              <span className="block truncate text-[13px] font-bold leading-4 text-slate-950">ParkingSaaS</span>
               <span className="block truncate text-xs text-slate-500">{activeWorkspace.contextLabel}</span>
             </span>
           )}
         </Link>
       </div>
 
-      <div className={cn('space-y-5 border-b border-slate-100', collapsed ? 'p-3' : 'p-4')}>
-        <WorkspaceSwitcher
-          activeWorkspace={activeWorkspace}
-          authorizedWorkspaces={authorizedWorkspaces}
-          collapsed={collapsed}
-          onSelect={onWorkspaceSelect}
-        />
-      </div>
+      {activeWorkspace.id !== 'platform' && <div className={cn('border-b border-slate-100', collapsed ? 'p-2.5' : 'p-3')}><WorkspaceSwitcher activeWorkspace={activeWorkspace} authorizedWorkspaces={authorizedWorkspaces} collapsed={collapsed} onSelect={onWorkspaceSelect} /></div>}
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4" aria-label={`${activeWorkspace.label} navigation`}>
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 py-4" aria-label={`${activeWorkspace.label} navigation`}>
         <SidebarNavigation groups={groups} pathname={pathname} collapsed={collapsed} />
       </nav>
 
-      <div className="border-t border-slate-100 p-3">
+      {activeWorkspace.id === 'gate-operations' && <div className={cn('border-t border-slate-100', collapsed ? 'p-2.5' : 'p-3')}><GateLocationControl compact={!collapsed} collapsed={collapsed} /></div>}
+
+      <div className={cn('border-t border-slate-100', collapsed ? 'p-2.5' : 'p-3')}>
+        <UserMenu userName={userName} email={email} logout={logout} align="sidebar" collapsed={collapsed} />
         <button
           type="button"
           onClick={() => onCollapseChange(!collapsed)}
           className={cn(
-            'flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950',
+            'mt-2 flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950',
             'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
             collapsed && 'justify-center px-0',
           )}
@@ -182,40 +180,14 @@ function DesktopSidebar({
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
-          {!collapsed && <span>Collapse sidebar</span>}
+          {!collapsed && <span>Collapse</span>}
         </button>
       </div>
     </aside>
   );
 }
 
-function DesktopTopBar({
-  activeWorkspace,
-  userName,
-  email,
-  logout,
-}: {
-  activeWorkspace: WorkspaceDefinition;
-  userName: string;
-  email?: string;
-  logout: ReturnType<typeof useLogout>;
-}) {
-  const showLocation = activeWorkspace.id === 'gate-operations';
-
-  return (
-    <header
-      className={cn(
-        'sticky top-0 z-50 hidden h-16 items-center border-b border-white/70 bg-white/85 px-6 backdrop-blur-xl lg:flex',
-        showLocation ? 'justify-between' : 'justify-end',
-      )}
-    >
-      {showLocation && <GateLocationControl />}
-      <UserMenu userName={userName} email={email} logout={logout} align="right" />
-    </header>
-  );
-}
-
-function GateLocationControl({ compact = false }: { compact?: boolean }) {
+function GateLocationControl({ compact = false, collapsed = false }: { compact?: boolean; collapsed?: boolean }) {
   const { locations, selectedId, selected, setLocation, isLoading } = useGuardLocations();
 
   if (isLoading) {
@@ -227,11 +199,18 @@ function GateLocationControl({ compact = false }: { compact?: boolean }) {
   }
 
   if (locations.length === 0) {
+    if (collapsed) {
+      return <span className="group relative flex h-10 w-full items-center justify-center text-amber-700" title="No assigned working location"><MapPin className="h-4 w-4" /><span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-xs font-semibold text-white shadow-lg group-hover:block">No assigned working location</span></span>;
+    }
     return (
       <div className={cn('min-w-0 text-sm font-semibold text-amber-700', compact ? 'px-1' : undefined)}>
         No assigned working location
       </div>
     );
+  }
+
+  if (collapsed) {
+    return <span className="group relative flex h-10 w-full items-center justify-center text-brand-700" title={selected?.name ?? locations[0].name}><MapPin className="h-4 w-4" /><span className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-950 px-2 py-1 text-xs font-semibold text-white shadow-lg group-hover:block">{selected?.name ?? locations[0].name}</span></span>;
   }
 
   if (locations.length === 1) {
@@ -506,13 +485,14 @@ function SidebarNavigationItem({
       aria-current={active ? 'page' : undefined}
       aria-label={item.label}
       title={collapsed ? item.label : undefined}
-      className={cn(
-        'group relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition-colors',
+    className={cn(
+        'group relative flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-        active ? 'bg-brand-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950',
+        active ? 'bg-brand-50 text-brand-800' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950',
         collapsed && 'justify-center px-0',
       )}
     >
+      {active && <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-0.5 rounded-r-full bg-brand-700" />}
       <Icon className="h-4 w-4 shrink-0" />
       {!collapsed && <span className="truncate">{item.label}</span>}
       {collapsed && (
@@ -529,15 +509,19 @@ function UserMenu({
   email,
   logout,
   align = 'left',
+  collapsed = false,
 }: {
   userName: string;
   email?: string;
   logout: ReturnType<typeof useLogout>;
-  align?: 'left' | 'right';
+  align?: 'left' | 'right' | 'sidebar';
+  collapsed?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const navigate = useNavigate();
+  const initials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'PA';
 
   useEffect(() => {
     if (!open) return;
@@ -566,29 +550,56 @@ function UserMenu({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex min-h-11 items-center gap-3 rounded-xl bg-white px-3 text-left shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        className={cn(
+          'flex min-h-11 items-center gap-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+          align === 'sidebar' ? 'w-full rounded-lg px-2 py-1.5 hover:bg-slate-50' : 'rounded-lg bg-white px-3 shadow-sm ring-1 ring-slate-200 hover:bg-slate-50',
+          collapsed && 'justify-center px-0',
+        )}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={collapsed ? `${userName} account menu` : undefined}
+        title={collapsed ? userName : undefined}
       >
-        <UserCircle className="h-5 w-5 text-slate-500" />
-        <span className="hidden min-w-0 sm:block">
-          <span className="block max-w-48 truncate text-sm font-semibold text-slate-800">{userName}</span>
-          {email && <span className="block max-w-48 truncate text-xs text-slate-500">{email}</span>}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-800 ring-1 ring-brand-100">{initials}</span>
+        <span className={cn('min-w-0 flex-1', collapsed && 'hidden')}>
+          <span className="block truncate text-sm font-semibold text-slate-800">{userName}</span>
+          {email && <span className="block truncate text-xs text-slate-500">{email}</span>}
         </span>
-        <ChevronDown className={cn('h-4 w-4 text-slate-400 transition', open && 'rotate-180')} />
+        {!collapsed && <ChevronDown className={cn('h-4 w-4 shrink-0 text-slate-400 transition', open && 'rotate-180')} />}
       </button>
       {open && (
         <div
           role="menu"
           className={cn(
-            'absolute top-[calc(100%+0.5rem)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl',
-            align === 'right' ? 'right-0' : 'left-0',
+            'absolute z-50 rounded-lg border border-slate-200 bg-white p-2 shadow-xl',
+            align === 'sidebar'
+              ? collapsed ? 'bottom-0 left-[calc(100%+0.5rem)] w-64' : 'bottom-[calc(100%+0.5rem)] left-0 w-full'
+              : `top-[calc(100%+0.5rem)] ${align === 'right' ? 'right-0' : 'left-0'} w-64`,
           )}
         >
           <div className="px-3 py-2">
             <p className="truncate text-sm font-bold text-slate-950">{userName}</p>
             {email && <p className="truncate text-xs text-slate-500">{email}</p>}
           </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex min-h-10 w-full items-center rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            role="menuitem"
+          >
+            Profile
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate('/change-password');
+            }}
+            className="flex min-h-10 w-full items-center rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            role="menuitem"
+          >
+            Security
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -707,11 +718,11 @@ function MobileNavigationDrawer({
         </div>
 
         <div className="space-y-4 border-b border-slate-100 p-4">
-          <WorkspaceSwitcher
-            activeWorkspace={activeWorkspace}
-            authorizedWorkspaces={authorizedWorkspaces}
-            onSelect={onWorkspaceSelect}
-          />
+          {activeWorkspace.id !== 'platform' && <WorkspaceSwitcher
+              activeWorkspace={activeWorkspace}
+              authorizedWorkspaces={authorizedWorkspaces}
+              onSelect={onWorkspaceSelect}
+            />}
           {activeWorkspace.id === 'gate-operations' && <GateLocationControl compact />}
         </div>
 

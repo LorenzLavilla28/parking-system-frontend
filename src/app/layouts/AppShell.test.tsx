@@ -133,6 +133,16 @@ describe('AppShell workspace navigation', () => {
     expect(within(drawer).queryByText('Users')).not.toBeInTheDocument();
   });
 
+  it('gives platform administrators a single console hierarchy with the account in the sidebar', async () => {
+    renderShell('/platform', ['PlatformAdministrator']);
+
+    expect(await screen.findByRole('heading', { name: 'Platform home' })).toBeInTheDocument();
+    expect(screen.getAllByText('Platform Console').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Platform Console' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Demo User/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+  });
+
   it('lets authorized users switch workspaces from the mobile drawer and returns focus', async () => {
     const user = userEvent.setup();
     renderShell('/admin', ['TenantAdministrator']);

@@ -7,8 +7,8 @@ import type { EntryTicket as Ticket } from './api';
 
 export function EntryTicket({ ticket, onDone }: { ticket: Ticket; onDone: () => void }) {
   return (
-    <Card className="mx-auto max-w-md space-y-5 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+    <Card className="print-ticket mx-auto max-w-md space-y-5 text-center print:space-y-3 print:border-0 print:bg-white print:p-0 print:shadow-none print:ring-0">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 print:hidden">
         <TicketCheck className="h-7 w-7" />
       </div>
       <div>
@@ -20,10 +20,10 @@ export function EntryTicket({ ticket, onDone }: { ticket: Ticket; onDone: () => 
       <img
         src={ticket.qrCodeDataUri}
         alt="Parking session QR code"
-        className="mx-auto h-48 w-48 rounded-lg ring-1 ring-slate-200"
+        className="mx-auto h-48 w-48 rounded-lg ring-1 ring-slate-200 print:h-40 print:w-40"
       />
 
-      <div className="rounded-lg bg-slate-50 py-3">
+      <div className="rounded-lg bg-slate-50 py-3 print:bg-white print:py-0">
         <p className="text-xs uppercase tracking-wide text-slate-500">Ticket code</p>
         <p className="text-2xl font-bold tracking-widest text-slate-900">{ticket.ticketCode}</p>
       </div>

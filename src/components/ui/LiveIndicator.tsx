@@ -15,8 +15,9 @@ const views: Record<RealtimeStatus, View> = {
 };
 
 /** Small connection-status pill for realtime-enabled screens. */
-export function LiveIndicator({ status, className }: { status: RealtimeStatus; className?: string }) {
+export function LiveIndicator({ status, className, compact = false }: { status: RealtimeStatus; className?: string; compact?: boolean }) {
   const view = views[status];
+  const label = compact && status === 'live' ? 'Online' : view.label;
   return (
     <span
       className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', view.text, className)}
@@ -29,7 +30,7 @@ export function LiveIndicator({ status, className }: { status: RealtimeStatus; c
         )}
         <span className={cn('relative inline-flex h-2 w-2 rounded-full', view.dot)} />
       </span>
-      {view.label}
+      {label}
     </span>
   );
 }

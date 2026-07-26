@@ -1,4 +1,5 @@
-import { useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -8,12 +9,17 @@ import {
   ClipboardList,
   Eye,
   EyeOff,
+  History,
   KeyRound,
+  MoreHorizontal,
+  PauseCircle,
+  PlayCircle,
   Plus,
+  Search,
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import { platformApi, type CreateTenantInput, type Tenant, SUBSCRIPTION_PLANS, TENANT_STATUSES } from './api';
+import { platformApi, type CreateTenantInput, type Tenant, type TenantAuditLog, SUBSCRIPTION_PLANS, TENANT_STATUSES } from './api';
 import { slugify } from '@/lib/slug';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -25,6 +31,7 @@ import { MetricCard } from '@/components/ui/MetricCard';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Table, THead, TBody, Th, Td } from '@/components/ui/Table';
 import { Alert } from '@/components/ui/Alert';
+import { Textarea } from '@/components/ui/Textarea';
 import { ErrorState, EmptyState, LoadingState } from '@/components/ui/states';
 import { cn } from '@/components/ui/cn';
 
@@ -58,15 +65,19 @@ type FieldName =
 
 type FormErrors = Partial<Record<FieldName, string>>;
 
-export function PlatformTenantsPage() {
+export function LegacyPlatformTenantsPage() {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
-  const [addOnTenant, setAddOnTenant] = useState<Tenant | null>(null);
+  const [capacityTenant, setCapacityTenant] = useState<Tenant | null>(null);
 
   const tenants = useQuery({ queryKey: ['platform-tenants'], queryFn: () => platformApi.listTenants() });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
   const changeStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => platformApi.changeStatus(id, status),
+    onSuccess: invalidate,
+  });
+  const changePlan = useMutation({
+    mutationFn: ({ id, subscriptionPlan }: { id: string; subscriptionPlan: string }) => platformApi.changePlan(id, subscriptionPlan),
     onSuccess: invalidate,
   });
   const activeCount = tenants.data?.items.filter((tenant) => tenant.status === 'Active').length ?? 0;
@@ -76,7 +87,7 @@ export function PlatformTenantsPage() {
       <PageHeader
         eyebrow="Platform"
         title="Tenants"
-        description="Create the tenant account, assign its paid membership tier, and provision the first administrator."
+        description="Create tenant accounts, manage subscription plans, and set additional capacity without creating locations."
         actions={
           <Button onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" />
@@ -94,6 +105,12 @@ export function PlatformTenantsPage() {
       {tenants.isError && <ErrorState error={tenants.error} />}
       {tenants.data && tenants.data.items.length === 0 && <EmptyState>No tenants yet.</EmptyState>}
 
+      {(changePlan.isError || changePlan.isSuccess) && (
+        <Alert tone={changePlan.isError ? 'error' : 'success'}>
+          {changePlan.isError ? 'Plan change could not be saved. Check the tenant capacity and location limits, then try again.' : 'Plan updated successfully.'}
+        </Alert>
+      )}
+
       {tenants.data && tenants.data.items.length > 0 && (
         <Table>
           <THead>
@@ -103,7 +120,7 @@ export function PlatformTenantsPage() {
               <Th>Plan</Th>
               <Th>Status</Th>
               <Th>Change status</Th>
-              <Th>Add-on</Th>
+              <Th>Add-on capacity</Th>
             </tr>
           </THead>
           <TBody>
@@ -111,7 +128,22 @@ export function PlatformTenantsPage() {
               <tr key={tenant.id}>
                 <Td className="font-medium text-slate-900">{tenant.name}</Td>
                 <Td className="font-mono text-xs">{tenant.slug}</Td>
-                <Td>{tenant.subscriptionPlan}</Td>
+                <Td>
+                  <Select
+                    className="h-9 max-w-[10rem]"
+                    aria-label={`Plan for ${tenant.name}`}
+                    value={tenant.subscriptionPlan}
+                    disabled={changePlan.isPending}
+                    onChange={(event) => changePlan.mutate({ id: tenant.id, subscriptionPlan: event.target.value })}
+                  >
+                    {SUBSCRIPTION_PLANS.map((plan) => (
+                      <option key={plan} value={plan}>{plan}</option>
+                    ))}
+                  </Select>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {tenant.monthlyPrice ? `₱${tenant.monthlyPrice.toLocaleString()}/month` : 'Custom pricing'}
+                  </p>
+                </Td>
                 <Td>
                   <Badge tone={statusTone(tenant.status)}>{tenant.status}</Badge>
                 </Td>
@@ -131,10 +163,13 @@ export function PlatformTenantsPage() {
                   </div>
                 </Td>
                 <Td>
-                  <Button type="button" variant="secondary" onClick={() => setAddOnTenant(tenant)}>
+                  <Button type="button" variant="secondary" onClick={() => setCapacityTenant(tenant)}>
                     <Plus className="h-4 w-4" />
-                    Location
+                    Manage
                   </Button>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {tenant.additionalSlotCapacity > 0 ? `+${tenant.additionalSlotCapacity} slots` : 'None'}
+                  </p>
                 </Td>
               </tr>
             ))}
@@ -150,68 +185,60 @@ export function PlatformTenantsPage() {
           }}
         />
       )}
-      {addOnTenant && <AddOnLocationModal tenant={addOnTenant} onClose={() => setAddOnTenant(null)} onCreated={invalidate} />}
+      {capacityTenant && <CapacityAddonModal tenant={capacityTenant} onClose={() => setCapacityTenant(null)} onSaved={invalidate} />}
     </div>
   );
 }
 
-function AddOnLocationModal({ tenant, onClose, onCreated }: { tenant: Tenant; onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({
-    name: '',
-    slug: '',
-    address: '',
-    timezone: tenant.defaultTimezone,
-    slotCapacity: 20,
-    monthlyPrice: '',
-  });
-  const addOn = useMutation({
-    mutationFn: () => platformApi.createAddOnLocation(tenant.id, {
-      name: form.name.trim(),
-      slug: (form.slug || slugify(form.name)).trim(),
-      address: form.address.trim() || null,
-      timezone: form.timezone,
-      slotCapacity: form.slotCapacity,
-      monthlyPrice: form.monthlyPrice ? Number(form.monthlyPrice) : null,
-    }),
+function CapacityAddonModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: () => void }) {
+  const [additionalCapacity, setAdditionalCapacity] = useState(tenant.additionalSlotCapacity);
+  const save = useMutation({
+    mutationFn: () => platformApi.updateCapacityAddon(tenant.id, additionalCapacity),
     onSuccess: () => {
-      onCreated();
+      onSaved();
       onClose();
     },
   });
-  const standardPrice = form.slotCapacity <= 20 ? 3000 : form.slotCapacity <= 50 ? 6000 : form.slotCapacity <= 90 ? 10000 : null;
+  const baseCapacity = tenant.maximumSlotsPerLocation;
+  const effectiveCapacity = tenant.effectiveMaximumSlotsPerLocation == null || baseCapacity == null
+    ? null
+    : baseCapacity + additionalCapacity;
 
   return (
-    <Modal open onClose={onClose} title={`Add location to ${tenant.name}`} size="lg">
-      <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); addOn.mutate(); }}>
-        <Alert tone="info">This provisions a platform-approved paid add-on. Standard capacity bands are priced automatically; capacities above 90 require a custom monthly price.</Alert>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Location name" htmlFor="addon-name">
-            <Input id="addon-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required />
-          </FormField>
-          <FormField label="Slug" htmlFor="addon-slug">
-            <Input id="addon-slug" value={form.slug} onChange={(event) => setForm({ ...form, slug: slugify(event.target.value) })} placeholder="branch-two" required />
-          </FormField>
+    <Modal open onClose={onClose} title={`Manage capacity for ${tenant.name}`} size="md">
+      <form className="space-y-5" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
+        <Alert tone="info">
+          Add-on capacity increases the slot allowance for each location. It does not create a new location; create locations separately from the tenant administration workspace.
+        </Alert>
+        <div className="grid gap-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current plan</p>
+            <p className="mt-1 font-semibold text-slate-900">{tenant.subscriptionPlan}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Base capacity</p>
+            <p className="mt-1 font-semibold text-slate-900">{baseCapacity == null ? 'Custom' : `${baseCapacity} slots per location`}</p>
+          </div>
         </div>
-        <FormField label="Address" htmlFor="addon-address">
-          <Input id="addon-address" value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
+        <FormField label="Additional capacity (slots per location)" htmlFor="addon-capacity">
+          <Input
+            id="addon-capacity"
+            type="number"
+            min={0}
+            value={additionalCapacity}
+            onChange={(event) => setAdditionalCapacity(Math.max(0, Number(event.target.value)))}
+            required
+          />
+          <p className="text-sm text-slate-500">Set to 0 to remove the add-on.</p>
         </FormField>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label="Timezone" htmlFor="addon-timezone">
-            <Select id="addon-timezone" value={form.timezone} onChange={(event) => setForm({ ...form, timezone: event.target.value })}>
-              {timezoneOptions.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}
-            </Select>
-          </FormField>
-          <FormField label="Parking slots" htmlFor="addon-slots">
-            <Input id="addon-slots" type="number" min={1} value={form.slotCapacity} onChange={(event) => setForm({ ...form, slotCapacity: Number(event.target.value) })} required />
-          </FormField>
+        <div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900">
+          <span className="font-semibold">Effective capacity: </span>
+          {effectiveCapacity == null ? 'Managed by custom plan' : `${effectiveCapacity} slots per location`}
         </div>
-        <FormField label="Monthly add-on price (PHP)" htmlFor="addon-price">
-          <Input id="addon-price" type="number" min={1} value={form.monthlyPrice || (standardPrice ?? '')} onChange={(event) => setForm({ ...form, monthlyPrice: event.target.value })} placeholder={standardPrice ? String(standardPrice) : 'Required for custom capacity'} required={!standardPrice} />
-        </FormField>
-        {addOn.isError && <ErrorState error={addOn.error} />}
+        {save.isError && <ErrorState error={save.error} />}
         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={addOn.isPending}>Provision add-on</Button>
+          <Button type="submit" loading={save.isPending}>Save capacity</Button>
         </div>
       </form>
     </Modal>
@@ -731,3 +758,155 @@ function generateTemporaryPassword() {
   crypto.getRandomValues(values);
   return Array.from(values, (value) => characters[value % characters.length]).join('');
 }
+
+export function PlatformTenantsPage() {
+  const queryClient = useQueryClient();
+  const [creating, setCreating] = useState(false);
+  const [capacityTenant, setCapacityTenant] = useState<Tenant | null>(null);
+  const [detailsTenant, setDetailsTenant] = useState<Tenant | null>(null);
+  const [planTenant, setPlanTenant] = useState<Tenant | null>(null);
+  const [statusTenant, setStatusTenant] = useState<Tenant | null>(null);
+  const [auditTenant, setAuditTenant] = useState<Tenant | null>(null);
+  const [search, setSearch] = useState('');
+  const [planFilter, setPlanFilter] = useState('All plans');
+  const [statusFilter, setStatusFilter] = useState('All statuses');
+  const [page, setPage] = useState(1);
+  const [toast, setToast] = useState<{ title: string; message: string; tone: 'success' | 'error' } | null>(null);
+  const pageSize = 10;
+
+  const tenants = useQuery({
+    queryKey: ['platform-tenants', search],
+    queryFn: () => platformApi.listTenants({ pageSize: 100, search: search.trim() || undefined }),
+  });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+  const allTenants = tenants.data?.items ?? [];
+  const filteredTenants = allTenants.filter((tenant) =>
+    (planFilter === 'All plans' || tenant.subscriptionPlan === planFilter)
+    && (statusFilter === 'All statuses' || tenant.status === statusFilter));
+  const totalPages = Math.max(1, Math.ceil(filteredTenants.length / pageSize));
+  const visibleTenants = filteredTenants.slice((page - 1) * pageSize, page * pageSize);
+  const activeCount = allTenants.filter((tenant) => tenant.status === 'Active').length;
+  const notify = (title: string, message: string, tone: 'success' | 'error' = 'success') => setToast({ title, message, tone });
+
+  useEffect(() => setPage(1), [search, planFilter, statusFilter]);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Platform" title="Tenants" description="Review tenant accounts and use deliberate actions for plan, access, and capacity changes." actions={<Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />New tenant</Button>} />
+      <div className="grid gap-4 sm:grid-cols-2"><MetricCard icon={Building2} label="Total tenants" value={tenants.data?.totalCount ?? '...'} detail="Provisioned operators" tone="blue" /><MetricCard icon={ShieldCheck} label="Active tenants" value={activeCount} detail="Currently enabled" tone="green" /></div>
+      {toast && <div className="flex items-start justify-between gap-4 rounded-lg bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200" role="status"><div><p className={cn('font-semibold', toast.tone === 'success' ? 'text-emerald-800' : 'text-red-800')}>{toast.title}</p><p className="mt-1 text-sm text-slate-600">{toast.message}</p></div><button type="button" className="text-sm font-semibold text-slate-400 hover:text-slate-700" onClick={() => setToast(null)} aria-label="Dismiss notification">Dismiss</button></div>}
+      {tenants.isLoading && <LoadingState />}
+      {tenants.isError && <ErrorState error={tenants.error} />}
+      {tenants.data && tenants.data.items.length === 0 && <EmptyState>No tenants yet.</EmptyState>}
+      {tenants.data && tenants.data.items.length > 0 && <>
+        <div className="flex flex-col gap-3 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:flex-row sm:items-center"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input aria-label="Search tenants" className="pl-9" placeholder="Search tenants" value={search} onChange={(event) => setSearch(event.target.value)} /></div><Select aria-label="Filter by plan" className="sm:w-44" value={planFilter} onChange={(event) => setPlanFilter(event.target.value)}><option>All plans</option>{SUBSCRIPTION_PLANS.map((plan) => <option key={plan}>{plan}</option>)}</Select><Select aria-label="Filter by status" className="sm:w-44" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All statuses</option>{TENANT_STATUSES.map((status) => <option key={status}>{status}</option>)}</Select></div>
+        {visibleTenants.length === 0 ? <EmptyState>No tenants match these filters.</EmptyState> : <Table><THead><tr><Th>Tenant</Th><Th>Plan</Th><Th>Status</Th><Th>Capacity</Th><Th className="text-right">Actions</Th></tr></THead><TBody>{visibleTenants.map((tenant) => <tr key={tenant.id}><Td><button type="button" className="text-left font-semibold text-brand-800 hover:text-brand-600 hover:underline" onClick={() => setDetailsTenant(tenant)}>{tenant.name}</button><p className="mt-1 text-xs text-slate-500">{tenant.activeLocationCount ?? 0} active {(tenant.activeLocationCount ?? 0) === 1 ? 'location' : 'locations'}</p></Td><Td><p className="font-semibold text-slate-900">{tenant.subscriptionPlan}</p><p className="mt-1 text-xs text-slate-500">{formatPrice(tenant.monthlyPrice)}</p></Td><Td><Badge tone={tenant.status === 'Suspended' ? 'red' : statusTone(tenant.status)}>{tenant.status}</Badge></Td><Td><p className="font-semibold text-slate-900">{tenant.additionalSlotCapacity > 0 ? `+${tenant.additionalSlotCapacity} slots/location` : 'Included capacity'}</p><p className="mt-1 text-xs text-slate-500">{tenant.effectiveMaximumSlotsPerLocation == null ? 'Custom plan' : `${tenant.effectiveMaximumSlotsPerLocation} slots/location total`}</p></Td><Td><div className="flex justify-end gap-2"><Button type="button" variant="secondary" size="sm" onClick={() => setDetailsTenant(tenant)}>Manage</Button><TenantActionsMenu tenant={tenant} onPlan={() => setPlanTenant(tenant)} onStatus={() => setStatusTenant(tenant)} onCapacity={() => setCapacityTenant(tenant)} onAudit={() => setAuditTenant(tenant)} /></div></Td></tr>)}</TBody></Table>}
+        <div className="flex items-center justify-between text-sm text-slate-500"><span>Showing {visibleTenants.length} of {filteredTenants.length} tenants</span><div className="flex gap-2"><Button type="button" variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span className="flex items-center px-2">Page {page} of {totalPages}</span><Button type="button" variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next</Button></div></div>
+      </>}
+      {creating && <TenantOnboardingWizard onClose={() => setCreating(false)} onCreated={invalidate} />}
+      {capacityTenant && <CapacityAddonReviewModal tenant={capacityTenant} onClose={() => setCapacityTenant(null)} onSaved={() => { invalidate(); notify('Capacity updated', `${capacityTenant.name}'s additional capacity was updated.`); }} />}
+      {planTenant && <PlanReviewModal tenant={planTenant} onClose={() => setPlanTenant(null)} onSaved={(from, to) => { invalidate(); setPlanTenant(null); notify('Plan updated', `${planTenant.name} was changed from ${from} to ${to}.`); }} />}
+      {statusTenant && <StatusReviewModal tenant={statusTenant} onClose={() => setStatusTenant(null)} onSaved={(status) => { invalidate(); setStatusTenant(null); notify(status === 'Suspended' ? 'Tenant suspended' : 'Tenant activated', `${statusTenant.name} is now ${status.toLowerCase()}. Existing data was retained.`); }} />}
+      {detailsTenant && <TenantDetailsModalV2 tenant={detailsTenant} onClose={() => setDetailsTenant(null)} onPlan={() => { setPlanTenant(detailsTenant); setDetailsTenant(null); }} onStatus={() => { setStatusTenant(detailsTenant); setDetailsTenant(null); }} onCapacity={() => { setCapacityTenant(detailsTenant); setDetailsTenant(null); }} onAudit={() => setAuditTenant(detailsTenant)} />}
+      {auditTenant && <AuditHistoryModalV2 tenant={auditTenant} onClose={() => setAuditTenant(null)} />}
+    </div>
+  );
+}
+
+function TenantActionsMenu({ tenant, onPlan, onStatus, onCapacity, onAudit }: { tenant: Tenant; onPlan: () => void; onStatus: () => void; onCapacity: () => void; onAudit: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const action = (callback: () => void) => { setOpen(false); callback(); };
+  const itemClass = 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50';
+  useEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const trigger = triggerRef.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const menuWidth = 224;
+      const menuHeight = menuRef.current?.offsetHeight ?? 200;
+      const gap = 8;
+      const openAbove = trigger.bottom + menuHeight + gap > window.innerHeight && trigger.top - menuHeight - gap >= 8;
+      setPosition({
+        top: openAbove ? trigger.top - menuHeight - gap : trigger.bottom + gap,
+        left: Math.min(Math.max(8, trigger.right - menuWidth), window.innerWidth - menuWidth - 8),
+      });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+    };
+  }, [open]);
+
+  const menu = open ? createPortal(
+    <div ref={menuRef} className="max-h-[calc(100vh-1rem)] w-56 overflow-y-auto rounded-lg bg-white p-1 shadow-xl ring-1 ring-slate-200" style={{ position: 'fixed', top: position.top, left: position.left, zIndex: 70 }} role="menu">
+      <button className={itemClass} type="button" role="menuitem" onClick={() => action(onPlan)}>Change plan</button>
+      <button className={itemClass} type="button" role="menuitem" onClick={() => action(onStatus)}>{tenant.status === 'Active' ? <><PauseCircle className="h-4 w-4" />Suspend tenant</> : <><PlayCircle className="h-4 w-4" />Activate tenant</>}</button>
+      <button className={itemClass} type="button" role="menuitem" onClick={() => action(onCapacity)}>Manage capacity</button>
+      <button className={itemClass} type="button" role="menuitem" onClick={() => action(onAudit)}><History className="h-4 w-4" />View audit history</button>
+    </div>,
+    document.body,
+  ) : null;
+
+  return <div ref={triggerRef}><Button type="button" variant="secondary" size="sm" aria-label={`Actions for ${tenant.name}`} aria-expanded={open} onClick={() => setOpen((current) => !current)}><MoreHorizontal className="h-4 w-4" /></Button>{menu}</div>;
+}
+
+function TenantDetailsModalV2({ tenant, onClose, onPlan, onStatus, onCapacity, onAudit }: { tenant: Tenant; onClose: () => void; onPlan: () => void; onStatus: () => void; onCapacity: () => void; onAudit: () => void }) {
+  return <Modal open onClose={onClose} title={tenant.name} size="lg"><div className="space-y-5"><div className="grid gap-3 sm:grid-cols-3"><ReviewPanel title="Plan"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Monthly price" value={formatPrice(tenant.monthlyPrice)} /></ReviewPanel><ReviewPanel title="Operations"><ReviewItem label="Status" value={tenant.status} /><ReviewItem label="Locations" value={`${tenant.activeLocationCount ?? 0} active`} /></ReviewPanel><ReviewPanel title="Capacity"><ReviewItem label="Add-on" value={tenant.additionalSlotCapacity > 0 ? `+${tenant.additionalSlotCapacity} slots/location` : 'None'} /><ReviewItem label="Effective limit" value={tenant.effectiveMaximumSlotsPerLocation == null ? 'Custom plan' : `${tenant.effectiveMaximumSlotsPerLocation} slots/location`} /></ReviewPanel></div><div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onAudit}><History className="h-4 w-4" />Audit history</Button><Button type="button" variant="secondary" onClick={onCapacity}>Manage capacity</Button><Button type="button" variant="secondary" onClick={onStatus}>{tenant.status === 'Active' ? 'Suspend tenant' : 'Activate tenant'}</Button><Button type="button" onClick={onPlan}>Change plan</Button></div></div></Modal>;
+}
+
+function PlanReviewModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: (from: string, to: string) => void }) {
+  const [plan, setPlan] = useState('');
+  const [reason, setReason] = useState('');
+  const save = useMutation({ mutationFn: () => platformApi.changePlan(tenant.id, plan, reason), onSuccess: () => onSaved(tenant.subscriptionPlan, plan) });
+  const nextPrice = plan ? planPriceV2(plan) : null;
+  const nextLocations = plan ? planLocationsV2(plan) : null;
+  const conflict = nextLocations != null && (tenant.activeLocationCount ?? 0) > nextLocations;
+  return <Modal open onClose={onClose} title="Change subscription plan?"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (plan && reason.trim() && !conflict) save.mutate(); }}><Alert tone="warning">You’re changing {tenant.name} from {tenant.subscriptionPlan} to {plan || 'a new plan'}. This may affect billing, location limits, and add-on capacity.</Alert><FormField label="New plan" htmlFor="review-plan"><Select id="review-plan" value={plan} onChange={(event) => setPlan(event.target.value)}><option value="">Select a plan</option>{SUBSCRIPTION_PLANS.filter((item) => item !== tenant.subscriptionPlan).map((item) => <option key={item}>{item}</option>)}</Select></FormField>{plan && <div className="grid gap-3 rounded-lg bg-slate-50 p-4 text-sm ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Monthly price" value={`${formatPrice(tenant.monthlyPrice)} → ${formatPrice(nextPrice)}`} /><ReviewItem label="Included locations" value={`${tenant.maximumLocations ?? 'Custom'} → ${nextLocations ?? 'Custom'}`} /><ReviewItem label="Existing add-ons" value="No change" /><ReviewItem label="Effective" value="Immediately" /></div>}{conflict && <Alert tone="error">This tenant currently has {tenant.activeLocationCount} locations, but {plan} includes only {nextLocations}. Archive locations or choose a plan that covers them before downgrading.</Alert>}<FormField label="Reason for change" htmlFor="plan-reason-v2"><Textarea id="plan-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!plan || !reason.trim() || conflict} loading={save.isPending}>Confirm plan change</Button></div></form></Modal>;
+}
+
+function StatusReviewModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: (status: string) => void }) {
+  const targetStatus = tenant.status === 'Active' ? 'Suspended' : 'Active';
+  const [reason, setReason] = useState('');
+  const save = useMutation({ mutationFn: () => platformApi.changeStatus(tenant.id, targetStatus, reason), onSuccess: () => onSaved(targetStatus) });
+  const suspending = targetStatus === 'Suspended';
+  return <Modal open onClose={onClose} title={suspending ? `Suspend ${tenant.name}?` : `Activate ${tenant.name}?`}><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) save.mutate(); }}><Alert tone={suspending ? 'error' : 'info'}>{suspending ? 'Tenant users will lose access and new parking sessions cannot be created. Existing data will be retained.' : 'Activating this tenant will restore user access and parking operations.'}</Alert><div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-700 ring-1 ring-slate-200"><p className="font-semibold text-slate-900">Operational records retained</p><p className="mt-1">Existing sessions, payments, locations, and audit history are not deleted.</p></div><FormField label={suspending ? 'Reason for suspension' : 'Reason for activation'} htmlFor="status-reason-v2"><Textarea id="status-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this access change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>{suspending ? 'Keep active' : 'Cancel'}</Button><Button type="submit" variant={suspending ? 'danger' : 'primary'} disabled={!reason.trim()} loading={save.isPending}>{suspending ? 'Suspend tenant' : 'Activate tenant'}</Button></div></form></Modal>;
+}
+
+function CapacityAddonReviewModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: () => void }) {
+  const [additionalCapacity, setAdditionalCapacity] = useState(tenant.additionalSlotCapacity);
+  const [reason, setReason] = useState('');
+  const save = useMutation({ mutationFn: () => platformApi.updateCapacityAddon(tenant.id, additionalCapacity, reason), onSuccess: () => { onSaved(); onClose(); } });
+  const baseCapacity = tenant.maximumSlotsPerLocation;
+  const effectiveCapacity = tenant.effectiveMaximumSlotsPerLocation == null || baseCapacity == null ? null : baseCapacity + additionalCapacity;
+  return <Modal open onClose={onClose} title={`Manage capacity for ${tenant.name}`} size="md"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) save.mutate(); }}><Alert tone="info">Additional capacity applies to each location. It does not create a new location.</Alert><div className="grid gap-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Current add-on" value={`+${tenant.additionalSlotCapacity} slots/location`} /></div><FormField label="Additional capacity (slots per location)" htmlFor="addon-capacity-v2"><Input id="addon-capacity-v2" type="number" min={0} value={additionalCapacity} onChange={(event) => setAdditionalCapacity(Math.max(0, Number(event.target.value)))} required /><p className="text-sm text-slate-500">Set to 0 to remove the add-on.</p></FormField><div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900"><span className="font-semibold">Effective capacity: </span>{effectiveCapacity == null ? 'Managed by custom plan' : `${effectiveCapacity} slots per location`}</div><FormField label="Reason for change" htmlFor="capacity-reason-v2"><Textarea id="capacity-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!reason.trim()} loading={save.isPending}>Save capacity</Button></div></form></Modal>;
+}
+
+function AuditHistoryModalV2({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
+  const history = useQuery({ queryKey: ['tenant-audit-history', tenant.id], queryFn: () => platformApi.getAuditHistory(tenant.id) });
+  return <Modal open onClose={onClose} title={`Audit history · ${tenant.name}`} size="lg"><div className="space-y-4">{history.isLoading && <LoadingState />}{history.isError && <ErrorState error={history.error} />}{history.data?.length === 0 && <EmptyState>No audited tenant changes yet.</EmptyState>}{history.data?.map((entry) => <AuditEntryV2 key={entry.id} entry={entry} />)}</div></Modal>;
+}
+
+function AuditEntryV2({ entry }: { entry: TenantAuditLog }) {
+  const oldValues = parseAuditValuesV2(entry.oldValuesJson);
+  const newValues = parseAuditValuesV2(entry.newValuesJson);
+  return <article className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-slate-900">{formatAuditActionV2(entry.action)}</p><p className="mt-1 text-xs text-slate-500">{entry.administrator} · {new Date(entry.createdAt).toLocaleString()}</p></div>{entry.reason && <Badge tone="blue">Reason recorded</Badge>}</div><div className="mt-3 grid gap-3 text-sm sm:grid-cols-2"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Previous</p><p className="mt-1 break-words text-slate-700">{formatAuditValuesV2(oldValues)}</p></div><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">New</p><p className="mt-1 break-words text-slate-700">{formatAuditValuesV2(newValues)}</p></div></div>{entry.reason && <p className="mt-3 text-sm text-slate-600"><span className="font-semibold">Reason:</span> {entry.reason}</p>}</article>;
+}
+
+function formatAuditActionV2(action: string) { return action === 'tenant.plan_changed' ? 'Subscription plan changed' : action === 'tenant.status_changed' ? 'Tenant status changed' : action === 'tenant.capacity_addon_changed' ? 'Capacity add-on changed' : action; }
+function parseAuditValuesV2(value?: string | null): Record<string, unknown> { try { return value ? JSON.parse(value) as Record<string, unknown> : {}; } catch { return {}; } }
+function formatAuditValuesV2(values: Record<string, unknown>) { return Object.entries(values).map(([key, value]) => `${key}: ${value == null ? 'Not calculated' : String(value)}`).join(' · ') || 'No details'; }
+function planPriceV2(plan: string) { return plan === 'Starter' ? 3000 : plan === 'Growth' ? 6000 : plan === 'Enterprise' ? 10000 : null; }
+function planLocationsV2(plan: string) { return plan === 'Starter' ? 1 : plan === 'Growth' ? 2 : plan === 'Enterprise' ? 3 : null; }
+function formatPrice(price?: number | null) { return price == null ? 'Custom pricing' : `₱${price.toLocaleString()}/month`; }

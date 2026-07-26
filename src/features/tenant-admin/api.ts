@@ -37,6 +37,8 @@ export interface LocationQuota {
   maximumLocations: number | null;
   maximumSlotsPerLocation: number | null;
   canCreateLocation: boolean;
+  additionalSlotCapacity: number;
+  effectiveMaximumSlotsPerLocation: number | null;
 }
 
 // ---- Users -----------------------------------------------------------------

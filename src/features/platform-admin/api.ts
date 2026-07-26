@@ -11,9 +11,22 @@ export interface Tenant {
   defaultTimezone: string;
   maximumLocations?: number;
   maximumSlotsPerLocation?: number | null;
+  additionalSlotCapacity: number;
+  effectiveMaximumSlotsPerLocation?: number | null;
+  activeLocationCount?: number;
   monthlyPrice?: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TenantAuditLog {
+  id: string;
+  action: string;
+  administrator: string;
+  reason?: string | null;
+  oldValuesJson?: string | null;
+  newValuesJson?: string | null;
+  createdAt: string;
 }
 
 export interface CreateTenantInput {
@@ -28,14 +41,6 @@ export interface CreateTenantInput {
   adminPassword: string;
 }
 
-export interface CreateTenantLocationInput {
-  name: string;
-  slug: string;
-  address?: string | null;
-  timezone: string;
-  slotCapacity: number;
-}
-
 export interface HealthReadiness {
   status: string;
   database: string;
@@ -47,10 +52,13 @@ export const TENANT_STATUSES = ['Active', 'Suspended', 'Archived'] as const;
 export const platformApi = {
   listTenants: (q?: PageQuery) => api.get<PagedResult<Tenant>>('/api/platform/tenants', { params: q }),
   createTenant: (body: CreateTenantInput) => api.post<Tenant>('/api/platform/tenants', body),
-  changeStatus: (id: string, status: string) =>
-    api.patch<Tenant>(`/api/platform/tenants/${id}/status`, { status }),
-  createAddOnLocation: (id: string, body: CreateTenantLocationInput & { monthlyPrice?: number | null }) =>
-    api.post<Tenant>(`/api/platform/tenants/${id}/location-addons`, body),
+  changeStatus: (id: string, status: string, reason?: string) =>
+    api.patch<Tenant>(`/api/platform/tenants/${id}/status`, { status, reason }),
+  changePlan: (id: string, subscriptionPlan: string, reason?: string, effectiveDate = 'Immediately') =>
+    api.patch<Tenant>(`/api/platform/tenants/${id}/plan`, { subscriptionPlan, reason, effectiveDate }),
+  updateCapacityAddon: (id: string, additionalSlotCapacity: number, reason?: string) =>
+    api.patch<Tenant>(`/api/platform/tenants/${id}/capacity-addon`, { additionalSlotCapacity, reason }),
+  getAuditHistory: (id: string) => api.get<TenantAuditLog[]>(`/api/platform/tenants/${id}/audit-history`),
   health: async () => {
     const response = await http.get<HealthReadiness>('/api/health/ready');
     return response.data;

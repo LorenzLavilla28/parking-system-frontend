@@ -18,9 +18,23 @@ function renderLogin() {
 describe('LoginPage', () => {
   it('renders the sign-in form', () => {
     renderLogin();
-    expect(screen.getByRole('heading', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /remember me/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /show password/i })).toBeInTheDocument();
+  });
+
+  it('can reveal the password', async () => {
+    const user = userEvent.setup();
+    renderLogin();
+
+    const password = screen.getByLabelText(/^password$/i);
+    await user.type(password, 'secret');
+    await user.click(screen.getByRole('button', { name: /show password/i }));
+
+    expect(password).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('button', { name: /hide password/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows validation errors on empty submit (no network call)', async () => {
