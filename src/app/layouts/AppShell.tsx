@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth, useLogout } from '@/features/auth/hooks';
 import { useGuardLocations } from '@/features/guard/useGuardLocations';
+import { getCurrentTenantLogo } from '@/features/tenant-branding/api';
 import { cn } from '@/components/ui/cn';
 import { Select } from '@/components/ui/Select';
 import { LoadingState } from '@/components/ui/states';
@@ -26,6 +28,8 @@ import {
   type WorkspaceDefinition,
   type WorkspaceId,
 } from '@/app/workspaces';
+import { PRODUCT_NAME } from '@/app/brand';
+import { refreshAuthSession } from '@/lib/api/client';
 
 const COLLAPSED_KEY = 'parkingsaas.shell.sidebarCollapsed.v1';
 
@@ -42,6 +46,22 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
   const routeWorkspace = getWorkspaceForPath(location.pathname);
   const activeWorkspace = routeWorkspace ?? getWorkspaceById(workspaceId);
   const navigationGroups = getNavigationGroups(activeWorkspace, user?.roles);
+  const organizationName = activeWorkspace.id === 'platform'
+    ? PRODUCT_NAME
+    : user?.tenantName || '';
+  const tenantLogo = useQuery({
+    queryKey: ['tenant-logo', user?.tenantId],
+    queryFn: getCurrentTenantLogo,
+    enabled: activeWorkspace.id !== 'platform' && !!user?.tenantId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const tenantLogoUrl = useBlobUrl(activeWorkspace.id === 'platform' ? null : tenantLogo.data);
+
+  useEffect(() => {
+    if (activeWorkspace.id !== 'platform' && user && !user.tenantName) {
+      void refreshAuthSession();
+    }
+  }, [activeWorkspace.id, user]);
 
   useEffect(() => {
     try {
@@ -69,6 +89,8 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
     >
       <DesktopSidebar
         activeWorkspace={activeWorkspace}
+        organizationName={organizationName}
+        logoUrl={tenantLogoUrl}
         authorizedWorkspaces={authorizedWorkspaces}
         collapsed={sidebarCollapsed}
         groups={navigationGroups}
@@ -83,6 +105,8 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
       <div className="min-w-0">
         <MobileHeader
           activeWorkspace={activeWorkspace}
+          organizationName={organizationName}
+          logoUrl={tenantLogoUrl}
           buttonRef={menuButtonRef}
           onOpenNavigation={() => setDrawerOpen(true)}
         />
@@ -96,6 +120,8 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
 
       <MobileNavigationDrawer
         activeWorkspace={activeWorkspace}
+        organizationName={organizationName}
+        logoUrl={tenantLogoUrl}
         authorizedWorkspaces={authorizedWorkspaces}
         groups={navigationGroups}
         logout={logout}
@@ -117,6 +143,8 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
 
 function DesktopSidebar({
   activeWorkspace,
+  organizationName,
+  logoUrl,
   authorizedWorkspaces,
   collapsed,
   groups,
@@ -128,6 +156,8 @@ function DesktopSidebar({
   onWorkspaceSelect,
 }: {
   activeWorkspace: WorkspaceDefinition;
+  organizationName: string;
+  logoUrl: string | null;
   authorizedWorkspaces: WorkspaceDefinition[];
   collapsed: boolean;
   groups: NavigationGroup[];
@@ -140,19 +170,20 @@ function DesktopSidebar({
 }) {
   return (
     <aside className="sticky top-0 z-40 hidden h-screen min-h-0 border-r border-slate-200/80 bg-white/92 shadow-sm lg:flex lg:flex-col">
-      <div className={cn('border-b border-slate-100', collapsed ? 'p-2.5' : 'p-3')}>
+      <div className={cn('flex h-[6.5rem] items-center justify-center border-b border-slate-200/80', collapsed ? 'p-2.5' : 'px-3 py-2.5')}>
         <Link
           to={activeWorkspace.defaultPath}
-          className={cn('flex items-center gap-2.5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500', collapsed && 'justify-center')}
-          aria-label="ParkingSaaS home"
+          className={cn(
+            'flex rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+            collapsed ? 'items-center justify-center' : 'h-full w-full flex-col items-center justify-center gap-1.5 text-center',
+          )}
+          aria-label={`${organizationName || 'Workspace'} home`}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-900 text-white shadow-sm">
-            <ParkingCircle className="h-5 w-5" />
-          </span>
+          <OrganizationMark organizationName={organizationName} logoUrl={logoUrl} size={collapsed ? 'desktop' : 'sidebar'} />
           {!collapsed && (
-            <span className="min-w-0">
-              <span className="block truncate text-[13px] font-bold leading-4 text-slate-950">ParkingSaaS</span>
-              <span className="block truncate text-xs text-slate-500">{activeWorkspace.contextLabel}</span>
+            <span className="min-w-0 max-w-full">
+              {organizationName && <span className="block truncate text-sm font-semibold leading-4 text-slate-950">{organizationName}</span>}
+              <span className="mt-0.5 block truncate text-[11px] font-medium leading-4 text-slate-500">{activeWorkspace.id === 'platform' ? activeWorkspace.contextLabel : activeWorkspace.label}</span>
             </span>
           )}
         </Link>
@@ -255,10 +286,14 @@ function GateLocationControl({ compact = false, collapsed = false }: { compact?:
 
 function MobileHeader({
   activeWorkspace,
+  organizationName,
+  logoUrl,
   buttonRef,
   onOpenNavigation,
 }: {
   activeWorkspace: WorkspaceDefinition;
+  organizationName: string;
+  logoUrl: string | null;
   buttonRef: RefObject<HTMLButtonElement | null>;
   onOpenNavigation: () => void;
 }) {
@@ -273,8 +308,9 @@ function MobileHeader({
       >
         <Menu className="h-5 w-5" />
       </button>
+      <OrganizationMark organizationName={organizationName} logoUrl={logoUrl} size="compact" />
       <div className="min-w-0">
-        <p className="truncate text-sm font-bold leading-4 text-slate-950">ParkingSaaS</p>
+        {organizationName && <p className="truncate text-sm font-bold leading-4 text-slate-950">{organizationName}</p>}
         <p className="truncate text-xs text-slate-500">{activeWorkspace.label}</p>
       </div>
     </header>
@@ -620,6 +656,8 @@ function UserMenu({
 
 function MobileNavigationDrawer({
   activeWorkspace,
+  organizationName,
+  logoUrl,
   authorizedWorkspaces,
   groups,
   logout,
@@ -632,6 +670,8 @@ function MobileNavigationDrawer({
   onWorkspaceSelect,
 }: {
   activeWorkspace: WorkspaceDefinition;
+  organizationName: string;
+  logoUrl: string | null;
   authorizedWorkspaces: WorkspaceDefinition[];
   groups: NavigationGroup[];
   logout: ReturnType<typeof useLogout>;
@@ -699,12 +739,10 @@ function MobileNavigationDrawer({
       >
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
           <Link to={activeWorkspace.defaultPath} onClick={onNavigate} className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-900 text-white shadow-sm">
-              <ParkingCircle className="h-6 w-6" />
-            </span>
+            <OrganizationMark organizationName={organizationName} logoUrl={logoUrl} size="mobile" />
             <span className="min-w-0">
-              <span className="block truncate text-sm font-bold leading-4 text-slate-950">ParkingSaaS</span>
-              <span className="block truncate text-xs text-slate-500">{activeWorkspace.contextLabel}</span>
+              {organizationName && <span className="block truncate text-sm font-bold leading-4 text-slate-950">{organizationName}</span>}
+              <span className="block truncate text-xs text-slate-500">{activeWorkspace.id === 'platform' ? activeWorkspace.contextLabel : activeWorkspace.label}</span>
             </span>
           </Link>
           <button
@@ -756,6 +794,54 @@ function getFocusableElements(root: HTMLElement | null) {
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
   ).filter((element) => !element.hasAttribute('disabled') && element.tabIndex !== -1);
+}
+
+function OrganizationMark({
+  organizationName,
+  logoUrl,
+  size,
+}: {
+  organizationName: string;
+  logoUrl: string | null;
+  size: 'compact' | 'desktop' | 'mobile' | 'sidebar';
+}) {
+  const dimensions = size === 'sidebar'
+    ? logoUrl ? 'h-12 w-full max-w-[7.5rem]' : 'h-12 w-12'
+    : size === 'compact' ? 'h-9 w-9'
+      : size === 'mobile' ? 'h-10 w-10'
+        : 'h-9 w-9';
+  const iconSize = size === 'mobile' ? 'h-6 w-6' : 'h-5 w-5';
+
+  return (
+    <span
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-xl shadow-sm',
+        dimensions,
+        logoUrl ? 'bg-white p-1 ring-1 ring-slate-200' : 'bg-brand-900 text-white',
+      )}
+    >
+      {logoUrl
+        ? <img src={logoUrl} alt={`${organizationName || 'Tenant'} logo`} className="h-full w-full object-contain" />
+        : <ParkingCircle className={iconSize} aria-hidden="true" />}
+    </span>
+  );
+}
+
+function useBlobUrl(blob: Blob | null | undefined) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!blob) {
+      setUrl(null);
+      return;
+    }
+
+    const nextUrl = URL.createObjectURL(blob);
+    setUrl(nextUrl);
+    return () => URL.revokeObjectURL(nextUrl);
+  }, [blob]);
+
+  return url;
 }
 
 function readCollapsedPreference() {

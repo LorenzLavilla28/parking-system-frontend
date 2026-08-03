@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   Gauge,
   HeartPulse,
+  Image,
   LayoutDashboard,
   MapPin,
   ReceiptText,
@@ -92,6 +93,7 @@ export const workspaces: WorkspaceDefinition[] = [
           { label: 'Users', to: '/admin/users', icon: Users },
           { label: 'Rate plans', to: '/admin/rate-plans', icon: ReceiptText },
           { label: 'Payment settings', to: '/admin/settings/payments', icon: Settings },
+          { label: 'Branding', to: '/admin/settings/branding', icon: Image },
         ],
       },
       {

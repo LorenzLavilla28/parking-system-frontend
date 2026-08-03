@@ -57,10 +57,13 @@ function tenant(): Tenant {
     defaultTimezone: 'Asia/Manila',
     maximumLocations: 2,
     maximumSlotsPerLocation: 50,
+    purchasedSlotCapacityPerLocation: 50,
+    capacityPricingEnabled: true,
     additionalSlotCapacity: 0,
     effectiveMaximumSlotsPerLocation: 50,
     activeLocationCount: 1,
     monthlyPrice: 6000,
+    pricePerSlot: 120,
     createdAt: '2026-06-23T10:00:00.000Z',
     updatedAt: '2026-06-23T10:00:00.000Z',
   };
@@ -100,6 +103,9 @@ describe('PlatformTenantsPage onboarding', () => {
 
     await user.type(screen.getByLabelText('Tenant name'), 'Acme Parking');
     expect(screen.getByLabelText('Slug')).toHaveValue('acme-parking');
+    const capacity = screen.getByLabelText('Purchased capacity (slots per location)');
+    await user.clear(capacity);
+    await user.type(capacity, '10');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await user.type(screen.getByLabelText('First name'), 'Ada');
@@ -123,6 +129,7 @@ describe('PlatformTenantsPage onboarding', () => {
         adminLastName: 'Lovelace',
         adminEmail: 'ada@acme.test',
         adminPassword: 'StrongPass!2026',
+        purchasedSlotCapacityPerLocation: 10,
       });
     });
 

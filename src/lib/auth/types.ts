@@ -7,6 +7,7 @@ export type Role =
 export interface AuthUser {
   id: string;
   tenantId: string;
+  tenantName: string;
   email: string;
   fullName: string;
   roles: Role[];

@@ -11,6 +11,7 @@ function session(roles: AuthSession['user']['roles']): AuthSession {
     user: {
       id: 'u1',
       tenantId: 't1',
+      tenantName: 'Demo Parking Group',
       email: 'a@demo.local',
       fullName: 'A B',
       roles,

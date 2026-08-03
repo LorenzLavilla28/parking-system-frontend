@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Copy, KeyRound, Link2, LockKeyhole, RefreshCw, Unplug } from 'lucide-react';
 import { adminApi } from './api';
@@ -11,29 +11,22 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ErrorState } from '@/components/ui/states';
 
-const environments = ['test', 'live'] as const;
-
 export function PaymentSettingsPage() {
   const queryClient = useQueryClient();
   const connections = useQuery({
     queryKey: ['paymongo-connections'],
     queryFn: adminApi.getPayMongoConnections,
   });
-  const [environment, setEnvironment] = useState<(typeof environments)[number]>('test');
   const [secretKey, setSecretKey] = useState('');
   const [webhookSecret, setWebhookSecret] = useState('');
   const [accountId, setAccountId] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const selected = useMemo(
-    () => connections.data?.find((connection) => connection.environment === environment),
-    [connections.data, environment],
-  );
+  const selected = connections.data ?? undefined;
 
   const connect = useMutation({
     mutationFn: () =>
       adminApi.connectPayMongo({
-        environment,
         secretKey,
         webhookSecret,
         payMongoAccountId: accountId.trim() || undefined,
@@ -47,7 +40,7 @@ export function PaymentSettingsPage() {
   });
 
   const disconnect = useMutation({
-    mutationFn: () => adminApi.disconnectPayMongo(environment),
+    mutationFn: adminApi.disconnectPayMongo,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['paymongo-connections'] }),
   });
 
@@ -81,8 +74,7 @@ export function PaymentSettingsPage() {
               Connect PayMongo
             </div>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-              Use credentials from your own PayMongo dashboard. Test mode is recommended while setting up your first
-              connection.
+              Connect your live PayMongo account to accept real customer payments and settlement.
             </p>
           </div>
           {selected?.status === 'Connected' && (
@@ -92,32 +84,17 @@ export function PaymentSettingsPage() {
           )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {environments.map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setEnvironment(mode)}
-              className={`rounded-xl p-4 text-left ring-1 transition ${
-                environment === mode
-                  ? 'bg-brand-50 text-brand-900 ring-brand-300'
-                  : 'bg-white text-slate-700 ring-slate-200 hover:ring-slate-300'
-              }`}
-            >
-              <p className="font-bold">{mode === 'test' ? 'Test mode' : 'Live mode'}</p>
-              <p className="mt-1 text-sm opacity-75">
-                {mode === 'test' ? 'Safe for setup and payment testing.' : 'Real customer payments and settlement.'}
-              </p>
-            </button>
-          ))}
-        </div>
+        <Alert tone="warning">
+          Live mode only. Connecting these credentials enables real charges. Use a secret key beginning with
+          <span className="font-mono"> sk_live_</span>.
+        </Alert>
 
         {selected?.status === 'Connected' && (
           <div className="space-y-4 rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
             <div className="flex items-start gap-3">
               <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
               <div>
-                <p className="font-bold text-emerald-950">{environment === 'test' ? 'Test' : 'Live'} payments connected</p>
+                <p className="font-bold text-emerald-950">Live payments connected</p>
                 <p className="mt-1 text-sm text-emerald-800">
                   {selected.payMongoAccountId ? `PayMongo account: ${selected.payMongoAccountId}` : 'PayMongo credentials are active.'}
                 </p>
@@ -132,7 +109,7 @@ export function PaymentSettingsPage() {
                     <Copy className="h-4 w-4" /> {copied ? 'Copied' : 'Copy'}
                   </Button>
                 </div>
-                <p className="text-xs text-emerald-800">Add this URL to the matching environment in PayMongo Developers → Webhooks.</p>
+                <p className="text-xs text-emerald-800">Add this URL in PayMongo Live mode under Developers → Webhooks.</p>
               </div>
             )}
             <Button
@@ -141,7 +118,7 @@ export function PaymentSettingsPage() {
               onClick={() => disconnect.mutate()}
               loading={disconnect.isPending}
             >
-              <Unplug className="h-4 w-4" /> Disconnect {environment === 'test' ? 'test' : 'live'} payments
+              <Unplug className="h-4 w-4" /> Disconnect live payments
             </Button>
           </div>
         )}
@@ -164,7 +141,7 @@ export function PaymentSettingsPage() {
               id="paymongo-secret-key"
               type="password"
               autoComplete="new-password"
-              placeholder={environment === 'test' ? 'sk_test_...' : 'sk_live_...'}
+              placeholder="sk_live_..."
               value={secretKey}
               onChange={(event) => setSecretKey(event.target.value)}
               required

@@ -47,7 +47,7 @@ const steps = [
 ] as const;
 
 const stepFields: Record<number, FieldName[]> = {
-  0: ['name', 'slug', 'defaultCurrency', 'defaultTimezone'],
+  0: ['name', 'slug', 'defaultCurrency', 'defaultTimezone', 'purchasedSlotCapacityPerLocation'],
   1: ['adminFirstName', 'adminLastName', 'adminEmail', 'adminPassword'],
   2: [],
   3: [],
@@ -58,6 +58,7 @@ type FieldName =
   | 'slug'
   | 'defaultCurrency'
   | 'defaultTimezone'
+  | 'purchasedSlotCapacityPerLocation'
   | 'adminFirstName'
   | 'adminLastName'
   | 'adminEmail'
@@ -255,6 +256,7 @@ const emptyTenant: CreateTenantInput = {
   adminLastName: '',
   adminEmail: '',
   adminPassword: '',
+  purchasedSlotCapacityPerLocation: 50,
 };
 
 function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (tenant: Tenant) => void }) {
@@ -334,7 +336,8 @@ function TenantOnboardingWizard({ onClose, onCreated }: { onClose: () => void; o
                 setTenantSlugEdited(true);
                 set({ slug: slugify(slug) });
               }}
-              onPlanChange={(subscriptionPlan) => set({ subscriptionPlan })}
+               onPlanChange={(subscriptionPlan) => set({ subscriptionPlan, purchasedSlotCapacityPerLocation: planCapacityV2(subscriptionPlan) })}
+               onCapacityChange={(purchasedSlotCapacityPerLocation) => set({ purchasedSlotCapacityPerLocation })}
               onCurrencyChange={(defaultCurrency) => set({ defaultCurrency: defaultCurrency.toUpperCase() })}
               onTimezoneChange={(defaultTimezone) => {
                 set({ defaultTimezone });
@@ -425,6 +428,7 @@ function CompanyStep({
   onNameChange,
   onSlugChange,
   onPlanChange,
+  onCapacityChange,
   onCurrencyChange,
   onTimezoneChange,
 }: {
@@ -433,6 +437,7 @@ function CompanyStep({
   onNameChange: (value: string) => void;
   onSlugChange: (value: string) => void;
   onPlanChange: (value: string) => void;
+  onCapacityChange: (value: number | null) => void;
   onCurrencyChange: (value: string) => void;
   onTimezoneChange: (value: string) => void;
 }) {
@@ -458,6 +463,23 @@ function CompanyStep({
               </option>
             ))}
           </Select>
+        </FormField>
+        <FormField label="Purchased capacity (slots per location)" htmlFor="tenant-capacity" error={errorFor('purchasedSlotCapacityPerLocation')}>
+          <Input
+            id="tenant-capacity"
+            type="number"
+            min={1}
+            max={planCapacityV2(form.subscriptionPlan) ?? undefined}
+            value={form.purchasedSlotCapacityPerLocation ?? ''}
+            onChange={(event) => onCapacityChange(event.target.value ? Math.max(1, Number(event.target.value)) : null)}
+            disabled={planCapacityV2(form.subscriptionPlan) == null}
+            required={planCapacityV2(form.subscriptionPlan) != null}
+          />
+          <p className="text-sm text-slate-500">
+            {planCapacityV2(form.subscriptionPlan) == null
+              ? 'Custom plans use platform-managed capacity.'
+              : `Up to ${planCapacityV2(form.subscriptionPlan)} included slots; pricing is calculated per selected slot.`}
+          </p>
         </FormField>
         <FormField label="Default currency" htmlFor="tenant-currency" error={errorFor('defaultCurrency')}>
           <Select id="tenant-currency" value={form.defaultCurrency} onChange={(event) => onCurrencyChange(event.target.value)}>
@@ -592,6 +614,8 @@ function ReviewStep({ form }: { form: CreateTenantInput }) {
           <ReviewItem label="Tenant" value={form.name} />
           <ReviewItem label="Slug" value={form.slug} monospace />
           <ReviewItem label="Plan" value={form.subscriptionPlan} />
+          <ReviewItem label="Capacity" value={form.purchasedSlotCapacityPerLocation == null ? 'Platform-managed' : `${form.purchasedSlotCapacityPerLocation} slots/location`} />
+          <ReviewItem label="Monthly price" value={formatPrice(capacityPriceV2(form.subscriptionPlan, form.purchasedSlotCapacityPerLocation))} />
           <ReviewItem label="Defaults" value={`${form.defaultCurrency} / ${form.defaultTimezone}`} />
         </ReviewPanel>
         <ReviewPanel title="Administrator">
@@ -637,7 +661,8 @@ function OnboardingSuccess({ tenant, adminEmail, onClose }: { tenant: Tenant; ad
         <ReviewPanel title="Next setup">
           <ReviewItem label="Location" value="Create in tenant workspace" />
           <ReviewItem label="Rate plan" value="Assign before accepting entries" />
-          <ReviewItem label="Capacity" value="Controlled by the selected tier" />
+          <ReviewItem label="Capacity" value={tenant.purchasedSlotCapacityPerLocation == null ? 'Platform-managed' : `${tenant.purchasedSlotCapacityPerLocation} slots/location`} />
+          <ReviewItem label="Monthly price" value={formatPrice(tenant.monthlyPrice)} />
         </ReviewPanel>
       </div>
 
@@ -723,6 +748,10 @@ function validateTenantOnboarding(form: CreateTenantInput): FormErrors {
   if (!form.defaultCurrency.trim()) errors.defaultCurrency = 'Choose a currency.';
   else if (form.defaultCurrency.trim().length !== 3) errors.defaultCurrency = 'Use a 3-letter currency code.';
   if (!form.defaultTimezone.trim()) errors.defaultTimezone = 'Choose a default timezone.';
+  const maximumCapacity = planCapacityV2(form.subscriptionPlan);
+  if (maximumCapacity != null && (form.purchasedSlotCapacityPerLocation == null || form.purchasedSlotCapacityPerLocation < 1 || form.purchasedSlotCapacityPerLocation > maximumCapacity)) {
+    errors.purchasedSlotCapacityPerLocation = `Choose between 1 and ${maximumCapacity} slots.`;
+  }
 
   if (!form.adminFirstName.trim()) errors.adminFirstName = 'Enter the administrator first name.';
   if (!form.adminLastName.trim()) errors.adminLastName = 'Enter the administrator last name.';
@@ -745,6 +774,7 @@ function toCreateTenantPayload(form: CreateTenantInput): CreateTenantInput {
     adminLastName: form.adminLastName.trim(),
     adminEmail: form.adminEmail.trim().toLowerCase(),
     adminPassword: form.adminPassword,
+    purchasedSlotCapacityPerLocation: form.purchasedSlotCapacityPerLocation,
   };
 }
 
@@ -800,7 +830,7 @@ export function PlatformTenantsPage() {
       {tenants.data && tenants.data.items.length === 0 && <EmptyState>No tenants yet.</EmptyState>}
       {tenants.data && tenants.data.items.length > 0 && <>
         <div className="flex flex-col gap-3 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:flex-row sm:items-center"><div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input aria-label="Search tenants" className="pl-9" placeholder="Search tenants" value={search} onChange={(event) => setSearch(event.target.value)} /></div><Select aria-label="Filter by plan" className="sm:w-44" value={planFilter} onChange={(event) => setPlanFilter(event.target.value)}><option>All plans</option>{SUBSCRIPTION_PLANS.map((plan) => <option key={plan}>{plan}</option>)}</Select><Select aria-label="Filter by status" className="sm:w-44" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All statuses</option>{TENANT_STATUSES.map((status) => <option key={status}>{status}</option>)}</Select></div>
-        {visibleTenants.length === 0 ? <EmptyState>No tenants match these filters.</EmptyState> : <Table><THead><tr><Th>Tenant</Th><Th>Plan</Th><Th>Status</Th><Th>Capacity</Th><Th className="text-right">Actions</Th></tr></THead><TBody>{visibleTenants.map((tenant) => <tr key={tenant.id}><Td><button type="button" className="text-left font-semibold text-brand-800 hover:text-brand-600 hover:underline" onClick={() => setDetailsTenant(tenant)}>{tenant.name}</button><p className="mt-1 text-xs text-slate-500">{tenant.activeLocationCount ?? 0} active {(tenant.activeLocationCount ?? 0) === 1 ? 'location' : 'locations'}</p></Td><Td><p className="font-semibold text-slate-900">{tenant.subscriptionPlan}</p><p className="mt-1 text-xs text-slate-500">{formatPrice(tenant.monthlyPrice)}</p></Td><Td><Badge tone={tenant.status === 'Suspended' ? 'red' : statusTone(tenant.status)}>{tenant.status}</Badge></Td><Td><p className="font-semibold text-slate-900">{tenant.additionalSlotCapacity > 0 ? `+${tenant.additionalSlotCapacity} slots/location` : 'Included capacity'}</p><p className="mt-1 text-xs text-slate-500">{tenant.effectiveMaximumSlotsPerLocation == null ? 'Custom plan' : `${tenant.effectiveMaximumSlotsPerLocation} slots/location total`}</p></Td><Td><div className="flex justify-end gap-2"><Button type="button" variant="secondary" size="sm" onClick={() => setDetailsTenant(tenant)}>Manage</Button><TenantActionsMenu tenant={tenant} onPlan={() => setPlanTenant(tenant)} onStatus={() => setStatusTenant(tenant)} onCapacity={() => setCapacityTenant(tenant)} onAudit={() => setAuditTenant(tenant)} /></div></Td></tr>)}</TBody></Table>}
+         {visibleTenants.length === 0 ? <EmptyState>No tenants match these filters.</EmptyState> : <Table><THead><tr><Th>Tenant</Th><Th>Plan</Th><Th>Status</Th><Th>Capacity</Th><Th className="text-right">Actions</Th></tr></THead><TBody>{visibleTenants.map((tenant) => <tr key={tenant.id}><Td><button type="button" className="text-left font-semibold text-brand-800 hover:text-brand-600 hover:underline" onClick={() => setDetailsTenant(tenant)}>{tenant.name}</button><p className="mt-1 text-xs text-slate-500">{tenant.activeLocationCount ?? 0} active {(tenant.activeLocationCount ?? 0) === 1 ? 'location' : 'locations'}</p></Td><Td><p className="font-semibold text-slate-900">{tenant.subscriptionPlan}</p><p className="mt-1 text-xs text-slate-500">{formatPrice(tenant.monthlyPrice)}</p></Td><Td><Badge tone={tenant.status === 'Suspended' ? 'red' : statusTone(tenant.status)}>{tenant.status}</Badge></Td><Td><p className="font-semibold text-slate-900">{tenant.effectiveMaximumSlotsPerLocation == null ? 'Platform-managed capacity' : `${tenant.effectiveMaximumSlotsPerLocation} slots/location`}</p><p className="mt-1 text-xs text-slate-500">{tenant.additionalSlotCapacity > 0 ? `Includes +${tenant.additionalSlotCapacity} add-on slots` : tenant.capacityPricingEnabled ? 'Capacity-priced' : 'Legacy fixed pricing'}</p></Td><Td><div className="flex justify-end gap-2"><Button type="button" variant="secondary" size="sm" onClick={() => setDetailsTenant(tenant)}>Manage</Button><TenantActionsMenu tenant={tenant} onPlan={() => setPlanTenant(tenant)} onStatus={() => setStatusTenant(tenant)} onCapacity={() => setCapacityTenant(tenant)} onAudit={() => setAuditTenant(tenant)} /></div></Td></tr>)}</TBody></Table>}
         <div className="flex items-center justify-between text-sm text-slate-500"><span>Showing {visibleTenants.length} of {filteredTenants.length} tenants</span><div className="flex gap-2"><Button type="button" variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button><span className="flex items-center px-2">Page {page} of {totalPages}</span><Button type="button" variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>Next</Button></div></div>
       </>}
       {creating && <TenantOnboardingWizard onClose={() => setCreating(false)} onCreated={invalidate} />}
@@ -863,14 +893,14 @@ function TenantActionsMenu({ tenant, onPlan, onStatus, onCapacity, onAudit }: { 
 }
 
 function TenantDetailsModalV2({ tenant, onClose, onPlan, onStatus, onCapacity, onAudit }: { tenant: Tenant; onClose: () => void; onPlan: () => void; onStatus: () => void; onCapacity: () => void; onAudit: () => void }) {
-  return <Modal open onClose={onClose} title={tenant.name} size="lg"><div className="space-y-5"><div className="grid gap-3 sm:grid-cols-3"><ReviewPanel title="Plan"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Monthly price" value={formatPrice(tenant.monthlyPrice)} /></ReviewPanel><ReviewPanel title="Operations"><ReviewItem label="Status" value={tenant.status} /><ReviewItem label="Locations" value={`${tenant.activeLocationCount ?? 0} active`} /></ReviewPanel><ReviewPanel title="Capacity"><ReviewItem label="Add-on" value={tenant.additionalSlotCapacity > 0 ? `+${tenant.additionalSlotCapacity} slots/location` : 'None'} /><ReviewItem label="Effective limit" value={tenant.effectiveMaximumSlotsPerLocation == null ? 'Custom plan' : `${tenant.effectiveMaximumSlotsPerLocation} slots/location`} /></ReviewPanel></div><div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onAudit}><History className="h-4 w-4" />Audit history</Button><Button type="button" variant="secondary" onClick={onCapacity}>Manage capacity</Button><Button type="button" variant="secondary" onClick={onStatus}>{tenant.status === 'Active' ? 'Suspend tenant' : 'Activate tenant'}</Button><Button type="button" onClick={onPlan}>Change plan</Button></div></div></Modal>;
+  return <Modal open onClose={onClose} title={tenant.name} size="lg"><div className="space-y-5"><div className="grid gap-3 sm:grid-cols-3"><ReviewPanel title="Plan"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Monthly price" value={formatPrice(tenant.monthlyPrice)} /><ReviewItem label="Price per slot" value={formatPrice(tenant.pricePerSlot ? tenant.pricePerSlot * 1 : null).replace('/month', '/slot/month')} /></ReviewPanel><ReviewPanel title="Operations"><ReviewItem label="Status" value={tenant.status} /><ReviewItem label="Locations" value={`${tenant.activeLocationCount ?? 0} active`} /></ReviewPanel><ReviewPanel title="Capacity"><ReviewItem label="Purchased" value={tenant.purchasedSlotCapacityPerLocation == null ? 'Platform-managed' : `${tenant.purchasedSlotCapacityPerLocation} slots/location`} /><ReviewItem label="Add-on" value={tenant.additionalSlotCapacity > 0 ? `+${tenant.additionalSlotCapacity} slots/location` : 'None'} /><ReviewItem label="Effective limit" value={tenant.effectiveMaximumSlotsPerLocation == null ? 'Custom plan' : `${tenant.effectiveMaximumSlotsPerLocation} slots/location`} /></ReviewPanel></div><div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onAudit}><History className="h-4 w-4" />Audit history</Button><Button type="button" variant="secondary" onClick={onCapacity}>Manage capacity</Button><Button type="button" variant="secondary" onClick={onStatus}>{tenant.status === 'Active' ? 'Suspend tenant' : 'Activate tenant'}</Button><Button type="button" onClick={onPlan}>Change plan</Button></div></div></Modal>;
 }
 
 function PlanReviewModal({ tenant, onClose, onSaved }: { tenant: Tenant; onClose: () => void; onSaved: (from: string, to: string) => void }) {
   const [plan, setPlan] = useState('');
   const [reason, setReason] = useState('');
   const save = useMutation({ mutationFn: () => platformApi.changePlan(tenant.id, plan, reason), onSuccess: () => onSaved(tenant.subscriptionPlan, plan) });
-  const nextPrice = plan ? planPriceV2(plan) : null;
+  const nextPrice = plan ? tenantPriceForPlanV2(tenant, plan) : null;
   const nextLocations = plan ? planLocationsV2(plan) : null;
   const conflict = nextLocations != null && (tenant.activeLocationCount ?? 0) > nextLocations;
   return <Modal open onClose={onClose} title="Change subscription plan?"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (plan && reason.trim() && !conflict) save.mutate(); }}><Alert tone="warning">You’re changing {tenant.name} from {tenant.subscriptionPlan} to {plan || 'a new plan'}. This may affect billing, location limits, and add-on capacity.</Alert><FormField label="New plan" htmlFor="review-plan"><Select id="review-plan" value={plan} onChange={(event) => setPlan(event.target.value)}><option value="">Select a plan</option>{SUBSCRIPTION_PLANS.filter((item) => item !== tenant.subscriptionPlan).map((item) => <option key={item}>{item}</option>)}</Select></FormField>{plan && <div className="grid gap-3 rounded-lg bg-slate-50 p-4 text-sm ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Monthly price" value={`${formatPrice(tenant.monthlyPrice)} → ${formatPrice(nextPrice)}`} /><ReviewItem label="Included locations" value={`${tenant.maximumLocations ?? 'Custom'} → ${nextLocations ?? 'Custom'}`} /><ReviewItem label="Existing add-ons" value="No change" /><ReviewItem label="Effective" value="Immediately" /></div>}{conflict && <Alert tone="error">This tenant currently has {tenant.activeLocationCount} locations, but {plan} includes only {nextLocations}. Archive locations or choose a plan that covers them before downgrading.</Alert>}<FormField label="Reason for change" htmlFor="plan-reason-v2"><Textarea id="plan-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!plan || !reason.trim() || conflict} loading={save.isPending}>Confirm plan change</Button></div></form></Modal>;
@@ -888,9 +918,10 @@ function CapacityAddonReviewModal({ tenant, onClose, onSaved }: { tenant: Tenant
   const [additionalCapacity, setAdditionalCapacity] = useState(tenant.additionalSlotCapacity);
   const [reason, setReason] = useState('');
   const save = useMutation({ mutationFn: () => platformApi.updateCapacityAddon(tenant.id, additionalCapacity, reason), onSuccess: () => { onSaved(); onClose(); } });
-  const baseCapacity = tenant.maximumSlotsPerLocation;
-  const effectiveCapacity = tenant.effectiveMaximumSlotsPerLocation == null || baseCapacity == null ? null : baseCapacity + additionalCapacity;
-  return <Modal open onClose={onClose} title={`Manage capacity for ${tenant.name}`} size="md"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) save.mutate(); }}><Alert tone="info">Additional capacity applies to each location. It does not create a new location.</Alert><div className="grid gap-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Current add-on" value={`+${tenant.additionalSlotCapacity} slots/location`} /></div><FormField label="Additional capacity (slots per location)" htmlFor="addon-capacity-v2"><Input id="addon-capacity-v2" type="number" min={0} value={additionalCapacity} onChange={(event) => setAdditionalCapacity(Math.max(0, Number(event.target.value)))} required /><p className="text-sm text-slate-500">Set to 0 to remove the add-on.</p></FormField><div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900"><span className="font-semibold">Effective capacity: </span>{effectiveCapacity == null ? 'Managed by custom plan' : `${effectiveCapacity} slots per location`}</div><FormField label="Reason for change" htmlFor="capacity-reason-v2"><Textarea id="capacity-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!reason.trim()} loading={save.isPending}>Save capacity</Button></div></form></Modal>;
+  const purchasedCapacity = tenant.purchasedSlotCapacityPerLocation ?? tenant.maximumSlotsPerLocation;
+  const effectiveCapacity = purchasedCapacity == null ? null : purchasedCapacity + additionalCapacity;
+  const nextPrice = capacityPriceV2(tenant.subscriptionPlan, effectiveCapacity);
+  return <Modal open onClose={onClose} title={`Manage capacity for ${tenant.name}`} size="md"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) save.mutate(); }}><Alert tone="info">Capacity applies to each location and changes the calculated monthly price. It does not create a new location.</Alert><div className="grid gap-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Current price" value={formatPrice(tenant.monthlyPrice)} /><ReviewItem label="Purchased capacity" value={purchasedCapacity == null ? 'Platform-managed' : `${purchasedCapacity} slots/location`} /><ReviewItem label="Current add-on" value={`+${tenant.additionalSlotCapacity} slots/location`} /></div><FormField label="Additional capacity (slots per location)" htmlFor="addon-capacity-v2"><Input id="addon-capacity-v2" type="number" min={0} value={additionalCapacity} onChange={(event) => setAdditionalCapacity(Math.max(0, Number(event.target.value)))} required /><p className="text-sm text-slate-500">Set to 0 to remove the add-on.</p></FormField><div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900"><p><span className="font-semibold">Effective capacity: </span>{effectiveCapacity == null ? 'Managed by custom plan' : `${effectiveCapacity} slots per location`}</p><p className="mt-1"><span className="font-semibold">New monthly price: </span>{formatPrice(nextPrice)}</p></div><FormField label="Reason for change" htmlFor="capacity-reason-v2"><Textarea id="capacity-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!reason.trim()} loading={save.isPending}>Save capacity</Button></div></form></Modal>;
 }
 
 function AuditHistoryModalV2({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
@@ -908,5 +939,18 @@ function formatAuditActionV2(action: string) { return action === 'tenant.plan_ch
 function parseAuditValuesV2(value?: string | null): Record<string, unknown> { try { return value ? JSON.parse(value) as Record<string, unknown> : {}; } catch { return {}; } }
 function formatAuditValuesV2(values: Record<string, unknown>) { return Object.entries(values).map(([key, value]) => `${key}: ${value == null ? 'Not calculated' : String(value)}`).join(' · ') || 'No details'; }
 function planPriceV2(plan: string) { return plan === 'Starter' ? 3000 : plan === 'Growth' ? 6000 : plan === 'Enterprise' ? 10000 : null; }
+function planCapacityV2(plan: string) { return plan === 'Starter' ? 20 : plan === 'Growth' ? 50 : plan === 'Enterprise' ? 90 : null; }
+function capacityPriceV2(plan: string, capacity?: number | null) {
+  const planPrice = planPriceV2(plan);
+  const planCapacity = planCapacityV2(plan);
+  if (planPrice == null || planCapacity == null || capacity == null) return null;
+  return Math.round((capacity * planPrice / planCapacity) * 100) / 100;
+}
+function tenantPriceForPlanV2(tenant: Tenant, plan: string) {
+  if (tenant.capacityPricingEnabled && tenant.purchasedSlotCapacityPerLocation != null) {
+    return capacityPriceV2(plan, tenant.purchasedSlotCapacityPerLocation + tenant.additionalSlotCapacity);
+  }
+  return planPriceV2(plan);
+}
 function planLocationsV2(plan: string) { return plan === 'Starter' ? 1 : plan === 'Growth' ? 2 : plan === 'Enterprise' ? 3 : null; }
 function formatPrice(price?: number | null) { return price == null ? 'Custom pricing' : `₱${price.toLocaleString()}/month`; }

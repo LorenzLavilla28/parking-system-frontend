@@ -37,17 +37,24 @@ export interface LocationQuota {
   maximumLocations: number | null;
   maximumSlotsPerLocation: number | null;
   canCreateLocation: boolean;
+  purchasedSlotCapacityPerLocation?: number | null;
+  capacityPricingEnabled?: boolean;
   additionalSlotCapacity: number;
   effectiveMaximumSlotsPerLocation: number | null;
 }
 
 export interface PayMongoConnection {
-  environment: string;
   status: string;
   payMongoAccountId: string | null;
   lastValidatedAt: string | null;
   lastError: string | null;
   webhookUrl: string | null;
+}
+
+export interface TenantBranding {
+  logoUrl: string | null;
+  contentType: string | null;
+  maxLogoBytes: number;
 }
 
 // ---- Users -----------------------------------------------------------------
@@ -294,15 +301,22 @@ export const adminApi = {
     api.post<OperationsSummaryEmailResponse>('/api/tenant/reports/operations-summary/email', undefined, { params: { hours } }),
 
   // Tenant-owned payment credentials
-  getPayMongoConnections: () => api.get<PayMongoConnection[]>('/api/tenant/payments/paymongo'),
+  getPayMongoConnections: () => api.get<PayMongoConnection | null>('/api/tenant/payments/paymongo'),
   connectPayMongo: (body: {
-    environment: string;
     secretKey: string;
     webhookSecret: string;
     payMongoAccountId?: string;
   }) => api.post<PayMongoConnection>('/api/tenant/payments/paymongo/connect', body),
-  disconnectPayMongo: (environment: string) =>
-    api.post<PayMongoConnection>('/api/tenant/payments/paymongo/disconnect', undefined, { params: { environment } }),
+  disconnectPayMongo: () => api.post<PayMongoConnection>('/api/tenant/payments/paymongo/disconnect'),
+
+  // Tenant branding
+  getBranding: () => api.get<TenantBranding>('/api/tenant/branding'),
+  uploadLogo: (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return api.post<TenantBranding>('/api/tenant/branding/logo', body);
+  },
+  deleteLogo: () => api.del<void>('/api/tenant/branding/logo'),
 
   // Locations
   listLocations: (q?: PageQuery) => api.get<PagedResult<Location>>('/api/tenant/locations', { params: q }),

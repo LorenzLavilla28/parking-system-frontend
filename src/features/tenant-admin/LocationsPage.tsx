@@ -290,9 +290,9 @@ function LocationModal({
 
   const capacityLedger = !quota
     ? 'Checking the platform-approved capacity allowance...'
-    : capacityLimit === null
-      ? `${quota.subscriptionPlan} uses platform-managed capacity. No automatic slot cap is enforced for this tenant.`
-      : `${quota.subscriptionPlan} plan: ${quota.maximumSlotsPerLocation ?? 0} slots${quota.additionalSlotCapacity > 0 ? ` + ${quota.additionalSlotCapacity} platform-approved add-on slots` : ''} = ${capacityLimit} slots per location.`;
+      : capacityLimit === null
+        ? `${quota.subscriptionPlan} uses platform-managed capacity. No automatic slot cap is enforced for this tenant.`
+      : `${quota.subscriptionPlan} capacity: ${quota.purchasedSlotCapacityPerLocation ?? quota.maximumSlotsPerLocation ?? 0} slots${quota.additionalSlotCapacity > 0 ? ` + ${quota.additionalSlotCapacity} add-on slots` : ''} = ${capacityLimit} slots per location.`;
 
   return (
     <Modal open onClose={onClose} title={isNew ? 'New location' : 'Edit location'} size="lg">

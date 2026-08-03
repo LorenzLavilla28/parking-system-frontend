@@ -4,6 +4,7 @@ export interface PublicLocation {
   slug: string;
   name: string;
   address: string | null;
+  logoUrl: string | null;
 }
 
 export interface PlateLookupResult {

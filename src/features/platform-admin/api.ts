@@ -11,10 +11,13 @@ export interface Tenant {
   defaultTimezone: string;
   maximumLocations?: number;
   maximumSlotsPerLocation?: number | null;
+  purchasedSlotCapacityPerLocation?: number | null;
+  capacityPricingEnabled?: boolean;
   additionalSlotCapacity: number;
   effectiveMaximumSlotsPerLocation?: number | null;
   activeLocationCount?: number;
   monthlyPrice?: number | null;
+  pricePerSlot?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +42,7 @@ export interface CreateTenantInput {
   adminLastName: string;
   adminEmail: string;
   adminPassword: string;
+  purchasedSlotCapacityPerLocation: number | null;
 }
 
 export interface HealthReadiness {

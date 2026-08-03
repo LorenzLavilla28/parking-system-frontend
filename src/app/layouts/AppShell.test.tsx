@@ -22,6 +22,10 @@ vi.mock('@/features/guard/api', () => ({
   },
 }));
 
+vi.mock('@/features/tenant-branding/api', () => ({
+  getCurrentTenantLogo: vi.fn(async () => null),
+}));
+
 function session(roles: Role[]): AuthSession {
   return {
     accessToken: 'access-token',
@@ -31,6 +35,7 @@ function session(roles: Role[]): AuthSession {
     user: {
       id: 'user-1',
       tenantId: 'tenant-1',
+      tenantName: 'Demo Parking Group',
       email: 'demo@example.test',
       fullName: 'Demo User',
       roles,
@@ -115,6 +120,8 @@ describe('AppShell workspace navigation', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Administration' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Rate plans' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Demo Parking Group home' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'PBP Parking home' })).not.toBeInTheDocument();
   });
 
   it('shows guard-only users the simple gate workflow without a workspace switcher', async () => {
@@ -124,7 +131,7 @@ describe('AppShell workspace navigation', () => {
     await user.click(screen.getByRole('button', { name: 'Open navigation' }));
     const drawer = await screen.findByRole('dialog', { name: 'Application navigation' });
 
-    expect(within(drawer).getByText('Gate Operations')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Gate Operations').length).toBeGreaterThan(0);
     expect(within(drawer).queryByRole('button', { name: 'Gate Operations' })).not.toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'Vehicle entry' })).toBeInTheDocument();
     expect(within(drawer).getByRole('link', { name: 'Active sessions' })).toBeInTheDocument();

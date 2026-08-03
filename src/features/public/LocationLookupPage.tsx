@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { CarFront, Search, ShieldCheck } from 'lucide-react';
 import { publicApi } from './api';
+import { apiUrl } from '@/lib/api/client';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -47,6 +48,7 @@ export function LocationLookupPage() {
   return (
     <div className="space-y-4">
       <div className="rounded-xl bg-white/70 p-5 shadow-sm ring-1 ring-white/80 backdrop-blur">
+        {location.data?.logoUrl && <img src={apiUrl(location.data.logoUrl)} alt="Parking operator logo" className="mb-4 max-h-16 max-w-48 object-contain object-left" />}
         <p className="text-xs font-bold uppercase tracking-wide text-brand-700">Parking lookup</p>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{location.data?.name}</h1>
         {location.data?.address && <p className="mt-1 text-sm text-slate-500">{location.data.address}</p>}

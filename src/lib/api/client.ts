@@ -10,6 +10,10 @@ import type { ApiResponse } from './types';
 
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
+export function apiUrl(path: string) {
+  return new URL(path, baseURL).toString();
+}
+
 /** Bare client used for the refresh call so it never re-enters the interceptor. */
 const bare = axios.create({ baseURL });
 
@@ -21,10 +25,10 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Single-flight refresh: concurrent 401s share one refresh round-trip.
-let refreshing: Promise<string | null> | null = null;
+// Single-flight refresh: concurrent callers share one refresh round-trip.
+let refreshing: Promise<AuthSession | null> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+async function performSessionRefresh(): Promise<AuthSession | null> {
   const token = refreshToken();
   if (!token) return null;
 
@@ -34,11 +38,18 @@ async function refreshAccessToken(): Promise<string | null> {
     });
     const s = res.data.data;
     useAuthStore.getState().setSession(s);
-    return s.accessToken;
+    return s;
   } catch {
     useAuthStore.getState().clear();
     return null;
   }
+}
+
+export async function refreshAuthSession(): Promise<AuthSession | null> {
+  refreshing ??= performSessionRefresh().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
 }
 
 http.interceptors.response.use(
@@ -50,12 +61,9 @@ http.interceptors.response.use(
 
     if (status === 401 && config && !config._retried && !isAuthCall && refreshToken()) {
       config._retried = true;
-      refreshing ??= refreshAccessToken().finally(() => {
-        refreshing = null;
-      });
-      const newToken = await refreshing;
-      if (newToken) {
-        config.headers = { ...config.headers, Authorization: `Bearer ${newToken}` };
+      const refreshedSession = await refreshAuthSession();
+      if (refreshedSession) {
+        config.headers = { ...config.headers, Authorization: `Bearer ${refreshedSession.accessToken}` };
         return http(config);
       }
     }

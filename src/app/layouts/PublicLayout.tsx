@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ParkingCircle } from 'lucide-react';
 import { LoadingState } from '@/components/ui/states';
+import { PRODUCT_NAME } from '@/app/brand';
 
 /** Minimal, mobile-first chrome for unauthenticated customer pages. */
 export function PublicLayout() {
@@ -13,7 +14,7 @@ export function PublicLayout() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-900 text-white">
               <ParkingCircle className="h-5 w-5" />
             </span>
-            ParkingSaaS
+            {PRODUCT_NAME}
           </span>
         </div>
       </header>
