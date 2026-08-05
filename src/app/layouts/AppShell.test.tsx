@@ -120,6 +120,7 @@ describe('AppShell workspace navigation', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Administration' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Rate plans' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Operations overview' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Demo Parking Group home' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'PBP Parking home' })).not.toBeInTheDocument();
   });

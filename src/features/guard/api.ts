@@ -98,7 +98,7 @@ export const guardApi = {
   getSession: (id: string) => api.get<SessionSummary>(`/api/guard/sessions/${id}`),
   getQr: (id: string) => api.post<SessionQr>(`/api/guard/sessions/${id}/qr`),
   exitStatus: (sessionId: string) => api.get<ExitStatus>(`/api/guard/exits/${sessionId}`),
-  approveExit: (body: { sessionId: string; exitPhotoUrl?: string | null; deviceInformation?: string | null; overrideReason?: string | null }) =>
+  approveExit: (body: { sessionId: string; exitPhotoUrl?: string | null; deviceInformation?: string | null; overrideReason?: string | null; cashPaymentAmount?: number | null }) =>
     api.post<ExitApproved>('/api/guard/exits', body),
   recordCash: (body: { sessionId: string; amountReceived: number; deviceInformation?: string | null }) =>
     api.post<CashReceipt>('/api/guard/cash-payments', body),

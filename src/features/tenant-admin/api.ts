@@ -93,10 +93,17 @@ export interface DashboardSummary {
   paidAwaitingExit: number;
   unpaidSessions: number;
   overGraceSessions: number;
+  overGraceAmount: number;
   todayEntries: number;
   todayExits: number;
   todayRevenue: number;
   currency: string;
+  periodEntries: number;
+  periodExits: number;
+  periodRevenue: number;
+  averageDurationMinutes: number;
+  previousPeriodRevenue: number;
+  supervisorOverrides: number;
 }
 
 export interface RevenuePoint {
@@ -160,6 +167,11 @@ export interface OperationsSummaryEmailResponse {
   periodEnd: string;
 }
 
+export interface OperationsSummarySettings {
+  enabled: boolean;
+  intervalHours: number;
+}
+
 export interface PaymentQuery {
   search?: string;
   status?: string;
@@ -199,6 +211,22 @@ export interface PaymentSummary {
   finalFee: number | null;
   totalPaid: number;
   paidExitDeadline: string | null;
+}
+
+export interface PaymentOverride {
+  id: string;
+  parkingSessionId: string;
+  parkingLocationId: string;
+  locationName: string;
+  plateNumberRaw: string;
+  action: string;
+  label: string;
+  reason: string;
+  performedBy: string;
+  createdAt: string;
+  feeOverride: number | null;
+  finalFee: number | null;
+  totalPaid: number;
 }
 
 export interface PaymentAudit {
@@ -294,11 +322,16 @@ export interface RatePlanVersion {
 
 export const adminApi = {
   // Dashboard reporting
-  getDashboardReport: (days = 7) => api.get<DashboardReport>('/api/tenant/dashboard', { params: { days } }),
+  getDashboardReport: (days = 7, filters?: { locationId?: string; from?: string; to?: string }) =>
+    api.get<DashboardReport>('/api/tenant/dashboard', { params: { days, ...filters } }),
   getOperationsSummary: (hours = 3) =>
     api.get<OperationsSummary>('/api/tenant/reports/operations-summary', { params: { hours } }),
   sendOperationsSummaryEmail: (hours = 3) =>
     api.post<OperationsSummaryEmailResponse>('/api/tenant/reports/operations-summary/email', undefined, { params: { hours } }),
+  getOperationsSummarySettings: () =>
+    api.get<OperationsSummarySettings>('/api/tenant/reports/operations-summary/settings'),
+  updateOperationsSummarySettings: (body: OperationsSummarySettings) =>
+    api.put<OperationsSummarySettings>('/api/tenant/reports/operations-summary/settings', body),
 
   // Tenant-owned payment credentials
   getPayMongoConnections: () => api.get<PayMongoConnection | null>('/api/tenant/payments/paymongo'),
@@ -335,6 +368,7 @@ export const adminApi = {
   // Rate plans
   listRatePlans: (locationId?: string, q?: PageQuery) =>
     api.get<PagedResult<RatePlan>>('/api/tenant/rate-plans', { params: { ...q, locationId } }),
+  getRatePlan: (id: string) => api.get<RatePlan>(`/api/tenant/rate-plans/${id}`),
   createRatePlan: (body: { name: string; description: string; rulesJson: string }) =>
     api.post<RatePlan>('/api/tenant/rate-plans', body),
   listVersions: (id: string) => api.get<RatePlanVersion[]>(`/api/tenant/rate-plans/${id}/versions`),
@@ -343,11 +377,13 @@ export const adminApi = {
   archiveRatePlan: (id: string) => api.del<void>(`/api/tenant/rate-plans/${id}`),
 
   // Sessions (admins are permitted on the guard endpoint).
-  listSessions: (params: { plate?: string; activeOnly?: boolean; locationId?: string }) =>
+  listSessions: (params: { plate?: string; activeOnly?: boolean; locationId?: string; page?: number; pageSize?: number }) =>
     api.get<PagedResult<SessionSummary>>('/api/guard/sessions', { params }),
 
   listPayments: (params: PaymentQuery) =>
     api.get<PagedResult<PaymentSummary>>('/api/tenant/payments', { params }),
+  listPaymentOverrides: (params?: { locationId?: string; from?: string; to?: string; pageSize?: number }) =>
+    api.get<PaymentOverride[]>('/api/tenant/payments/overrides', { params }),
   getPayment: (id: string) => api.get<PaymentDetail>(`/api/tenant/payments/${id}`),
   exportPayments: (params: PaymentQuery) =>
     http.get('/api/tenant/payments/export', { params, responseType: 'blob' }),

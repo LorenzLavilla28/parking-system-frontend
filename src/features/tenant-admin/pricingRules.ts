@@ -24,7 +24,8 @@ export interface RateRulesForm {
   overnightEndHour: number;
   weekendMultiplier: number | '';
   holidayMultiplier: number | '';
-  defaultRate: RateBlockForm;
+  carRate: RateBlockForm;
+  motorcycleRate: RateBlockForm;
 }
 
 export interface PricingRulesJson {
@@ -32,6 +33,10 @@ export interface PricingRulesJson {
   entryGraceMinutes: number;
   paidExitGraceMinutes: number;
   default: PricingRuleBlockJson;
+  vehicleRates: {
+    Car: PricingRuleBlockJson;
+    Motorcycle: PricingRuleBlockJson;
+  };
   weekendMultiplier?: number;
   holidayMultiplier?: number;
   overnight?: {
@@ -84,7 +89,8 @@ export const DEFAULT_RATE_RULES_FORM: RateRulesForm = {
   overnightEndHour: 6,
   weekendMultiplier: '',
   holidayMultiplier: '',
-  defaultRate,
+  carRate: { ...defaultRate },
+  motorcycleRate: { ...defaultRate },
 };
 
 const toNumberOrEmpty = (value: unknown): number | '' => {
@@ -92,23 +98,31 @@ const toNumberOrEmpty = (value: unknown): number | '' => {
   return Number.isFinite(numberValue) ? numberValue : '';
 };
 
+const readProperty = (record: Record<string, unknown>, name: string): unknown => {
+  const exactValue = record[name];
+  if (exactValue !== undefined) return exactValue;
+  const matchingKey = Object.keys(record).find((key) => key.toLocaleLowerCase() === name.toLocaleLowerCase());
+  return matchingKey === undefined ? undefined : record[matchingKey];
+};
+
 const readRateBlock = (value: unknown): RateBlockForm => {
   const block = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-  const type = block.type === 'Flat' || block.type === 'PerUnit' || block.type === 'FirstBlock' ? block.type : 'FirstBlock';
-  const incrementUnit = readUnit(block.incrementUnit, 'Hour');
-  const perUnit = readUnit(block.perUnit, 'Hour');
+  const rawType = readProperty(block, 'type');
+  const type = rawType === 'Flat' || rawType === 'PerUnit' || rawType === 'FirstBlock' ? rawType : 'FirstBlock';
+  const incrementUnit = readUnit(readProperty(block, 'incrementUnit'), 'Hour');
+  const perUnit = readUnit(readProperty(block, 'perUnit'), 'Hour');
 
   return {
     ...defaultRate,
     type,
-    flatAmount: Number(block.flatAmount ?? defaultRate.flatAmount),
-    firstHours: Number(block.firstHours ?? defaultRate.firstHours),
-    firstAmount: Number(block.firstAmount ?? defaultRate.firstAmount),
-    incrementAmount: Number(block.incrementAmount ?? defaultRate.incrementAmount),
+    flatAmount: Number(readProperty(block, 'flatAmount') ?? defaultRate.flatAmount),
+    firstHours: Number(readProperty(block, 'firstHours') ?? defaultRate.firstHours),
+    firstAmount: Number(readProperty(block, 'firstAmount') ?? defaultRate.firstAmount),
+    incrementAmount: Number(readProperty(block, 'incrementAmount') ?? defaultRate.incrementAmount),
     incrementUnit,
-    perUnitAmount: Number(block.perUnitAmount ?? defaultRate.perUnitAmount),
+    perUnitAmount: Number(readProperty(block, 'perUnitAmount') ?? defaultRate.perUnitAmount),
     perUnit,
-    fractionMinutes: Number(block.fractionMinutes ?? defaultRate.fractionMinutes),
+    fractionMinutes: Number(readProperty(block, 'fractionMinutes') ?? defaultRate.fractionMinutes),
   };
 };
 
@@ -122,23 +136,31 @@ export function parseRateRulesJson(rulesJson?: string): RateRulesForm {
 
   try {
     const parsed = JSON.parse(rulesJson) as Record<string, unknown>;
+    const overnightValue = readProperty(parsed, 'overnight');
     const overnight =
-      typeof parsed.overnight === 'object' && parsed.overnight !== null
-        ? (parsed.overnight as Record<string, unknown>)
+      typeof overnightValue === 'object' && overnightValue !== null
+        ? (overnightValue as Record<string, unknown>)
         : null;
+    const vehicleRatesValue = readProperty(parsed, 'vehicleRates');
+    const vehicleRates =
+      typeof vehicleRatesValue === 'object' && vehicleRatesValue !== null
+        ? (vehicleRatesValue as Record<string, unknown>)
+        : {};
+    const carRate = readRateBlock(readProperty(vehicleRates, 'Car') ?? readProperty(parsed, 'default'));
 
     return {
-      currency: String(parsed.currency ?? DEFAULT_RATE_RULES_FORM.currency),
-      entryGraceMinutes: Number(parsed.entryGraceMinutes ?? DEFAULT_RATE_RULES_FORM.entryGraceMinutes),
-      paidExitGraceMinutes: Number(parsed.paidExitGraceMinutes ?? DEFAULT_RATE_RULES_FORM.paidExitGraceMinutes),
-      lostTicketFee: toNumberOrEmpty(parsed.lostTicketFee),
+      currency: String(readProperty(parsed, 'currency') ?? DEFAULT_RATE_RULES_FORM.currency),
+      entryGraceMinutes: Number(readProperty(parsed, 'entryGraceMinutes') ?? DEFAULT_RATE_RULES_FORM.entryGraceMinutes),
+      paidExitGraceMinutes: Number(readProperty(parsed, 'paidExitGraceMinutes') ?? DEFAULT_RATE_RULES_FORM.paidExitGraceMinutes),
+      lostTicketFee: toNumberOrEmpty(readProperty(parsed, 'lostTicketFee')),
       enableOvernight: Boolean(overnight),
-      overnightFee: Number(overnight?.fee ?? DEFAULT_RATE_RULES_FORM.overnightFee),
-      overnightStartHour: Number(overnight?.startHour ?? DEFAULT_RATE_RULES_FORM.overnightStartHour),
-      overnightEndHour: Number(overnight?.endHour ?? DEFAULT_RATE_RULES_FORM.overnightEndHour),
-      weekendMultiplier: toNumberOrEmpty(parsed.weekendMultiplier),
-      holidayMultiplier: toNumberOrEmpty(parsed.holidayMultiplier),
-      defaultRate: readRateBlock(parsed.default),
+      overnightFee: Number((overnight ? readProperty(overnight, 'fee') : undefined) ?? DEFAULT_RATE_RULES_FORM.overnightFee),
+      overnightStartHour: Number((overnight ? readProperty(overnight, 'startHour') : undefined) ?? DEFAULT_RATE_RULES_FORM.overnightStartHour),
+      overnightEndHour: Number((overnight ? readProperty(overnight, 'endHour') : undefined) ?? DEFAULT_RATE_RULES_FORM.overnightEndHour),
+      weekendMultiplier: toNumberOrEmpty(readProperty(parsed, 'weekendMultiplier')),
+      holidayMultiplier: toNumberOrEmpty(readProperty(parsed, 'holidayMultiplier')),
+      carRate,
+      motorcycleRate: readRateBlock(readProperty(vehicleRates, 'Motorcycle') ?? carRate),
     };
   } catch {
     return DEFAULT_RATE_RULES_FORM;
@@ -150,7 +172,11 @@ export function buildPricingRules(form: RateRulesForm): PricingRulesJson {
     currency: form.currency,
     entryGraceMinutes: form.entryGraceMinutes,
     paidExitGraceMinutes: form.paidExitGraceMinutes,
-    default: buildRateBlock(form.defaultRate),
+    default: buildRateBlock(form.carRate),
+    vehicleRates: {
+      Car: buildRateBlock(form.carRate),
+      Motorcycle: buildRateBlock(form.motorcycleRate),
+    },
   };
 
   if (form.weekendMultiplier !== '') rules.weekendMultiplier = form.weekendMultiplier;
@@ -172,15 +198,20 @@ export function serializeRateRules(form: RateRulesForm) {
 }
 
 export function describeRateRules(form: RateRulesForm) {
-  const rate = form.defaultRate;
+  const car = describeRateBlock(form.carRate);
+  const motorcycle = describeRateBlock(form.motorcycleRate);
+  const grace = `${form.entryGraceMinutes} min entry grace; ${form.paidExitGraceMinutes} min paid-exit grace`;
+  return `Cars: ${car}. Motorcycles: ${motorcycle}. ${grace}.`;
+}
+
+export function describeRateBlock(rate: RateBlockForm) {
   const base =
     rate.type === 'Flat'
       ? `Flat ${formatPeso(rate.flatAmount)} per stay`
       : rate.type === 'PerUnit'
         ? `${formatPeso(rate.perUnitAmount)} per ${rate.perUnit.toLowerCase()}`
         : `${formatPeso(rate.firstAmount)} for first ${rate.firstHours} hours, then ${formatPeso(rate.incrementAmount)} per ${rate.incrementUnit.toLowerCase()}`;
-  const grace = `${form.entryGraceMinutes} min entry grace; ${form.paidExitGraceMinutes} min paid-exit grace`;
-  return `${base}; ${grace}.`;
+  return base;
 }
 
 function buildRateBlock(rate: RateBlockForm): PricingRuleBlockJson {

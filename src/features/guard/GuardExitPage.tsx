@@ -26,7 +26,9 @@ export function GuardExitPage() {
   const [plate, setPlate] = useState('');
   const [showQr, setShowQr] = useState(false);
   const [override, setOverride] = useState('');
+  const [overrideCashAmount, setOverrideCashAmount] = useState('');
   const [exited, setExited] = useState<{ finalFee: number; exitTime: string } | null>(null);
+  const parsedOverrideCashAmount = overrideCashAmount.trim() ? Number(overrideCashAmount) : null;
 
   useEffect(() => {
     const fromUrl = params.get('session');
@@ -46,6 +48,11 @@ export function GuardExitPage() {
     refetchInterval: 30_000,
   });
 
+  useEffect(() => {
+    if (status.data && overrideCashAmount === '')
+      setOverrideCashAmount(status.data.outstanding.toFixed(2));
+  }, [status.data?.sessionId, status.data?.outstanding, overrideCashAmount]);
+
   const qr = useQuery({
     queryKey: ['exit-qr', sessionId],
     queryFn: () => guardApi.getQr(sessionId!),
@@ -57,6 +64,7 @@ export function GuardExitPage() {
       guardApi.approveExit({
         sessionId: sessionId!,
         overrideReason: override.trim() || null,
+        cashPaymentAmount: parsedOverrideCashAmount !== null && Number.isFinite(parsedOverrideCashAmount) ? parsedOverrideCashAmount : null,
         deviceInformation: navigator.userAgent,
       }),
     onSuccess: (res) => {
@@ -73,6 +81,8 @@ export function GuardExitPage() {
     setSessionId(id);
     setParams({ session: id });
     setShowQr(false);
+    setOverride('');
+    setOverrideCashAmount('');
     setExited(null);
   }
 
@@ -90,6 +100,7 @@ export function GuardExitPage() {
               setSessionId(null);
               setExited(null);
               setPlate('');
+              setOverrideCashAmount('');
               setParams({});
             }}
           >
@@ -252,6 +263,20 @@ export function GuardExitPage() {
                     onChange={(event) => setOverride(event.target.value)}
                     placeholder="Reason, for example payment provider outage"
                   />
+                  <label className="block space-y-1.5 text-sm font-semibold text-slate-700">
+                    <span>Cash paid (optional)</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={status.data.outstanding}
+                      step="0.01"
+                      value={overrideCashAmount}
+                      onChange={(event) => setOverrideCashAmount(event.target.value)}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                    />
+                    <span className="block text-xs font-normal text-slate-500">Amount Due: {formatMoney(status.data.outstanding, status.data.currency)}. It will appear as cash revenue.</span>
+                  </label>
                   {approve.isError && <ErrorState error={approve.error} />}
                   <Button
                     variant="danger"
@@ -274,6 +299,8 @@ export function GuardExitPage() {
             variant="ghost"
             onClick={() => {
               setSessionId(null);
+              setOverride('');
+              setOverrideCashAmount('');
               setParams({});
             }}
           >

@@ -15,7 +15,9 @@ export function PaymentSettingsPage() {
   const queryClient = useQueryClient();
   const connections = useQuery({
     queryKey: ['paymongo-connections'],
-    queryFn: adminApi.getPayMongoConnections,
+    // Older API deployments omitted the envelope's data property when its value
+    // was null. Normalize that valid "not connected" state for rolling upgrades.
+    queryFn: async () => (await adminApi.getPayMongoConnections()) ?? null,
   });
   const [secretKey, setSecretKey] = useState('');
   const [webhookSecret, setWebhookSecret] = useState('');

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, CalendarRange, Check, CircleDollarSign, Copy, Download, ExternalLink, Search, ShieldCheck, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { adminApi, type PaymentDetail, type PaymentQuery, type PaymentSummary } from './api';
+import { adminApi, type PaymentDetail, type PaymentOverride, type PaymentQuery, type PaymentSummary } from './api';
 import { PaymentInvestigationView } from './PaymentInvestigationView';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -42,6 +42,10 @@ export function PaymentsPage() {
   const payments = useQuery({
     queryKey: ['admin-payments', query],
     queryFn: () => adminApi.listPayments(query),
+  });
+  const overrides = useQuery({
+    queryKey: ['admin-payment-overrides', query.from, query.to],
+    queryFn: () => adminApi.listPaymentOverrides({ from: query.from, to: query.to, pageSize: 10 }),
   });
   const detail = useQuery({
     queryKey: ['admin-payment', selectedId],
@@ -141,15 +145,18 @@ export function PaymentsPage() {
       <PageHeader
         eyebrow="Tenant administration"
         title="Payments"
-        description="Track every payment attempt and cross-check provider, receipt, session, and audit evidence."
+        description="Reconcile successful transactions, provider attempts, and supervisor-approved adjustments."
         actions={<Button variant="secondary" disabled={rows.length === 0 || payments.isFetching} onClick={downloadCsv}><Download className="h-4 w-4" /> Export results</Button>}
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={CircleDollarSign} label="Paid on this page" value={formatMoney(totalPaid)} detail={`${paid.length} successful payment${paid.length === 1 ? '' : 's'} · ${periodLabel}`} tone="green" />
         <MetricCard icon={CalendarRange} label="Pending payments" value={pending.length} detail="Awaiting provider confirmation" tone="amber" />
         <MetricCard icon={ShieldCheck} label="Failed attempts" value={failed.length} detail="Payment attempts that need review" tone="slate" />
+        <MetricCard icon={ShieldCheck} label="Recent overrides" value={overrides.data?.length ?? 0} detail="Latest approved adjustments" tone="blue" />
       </div>
+
+      <OverrideActivity items={overrides.data ?? []} isLoading={overrides.isLoading} error={overrides.error} />
 
       <Card className="p-4">
         <form className="space-y-3" onSubmit={applyFilters}>
@@ -157,7 +164,8 @@ export function PaymentsPage() {
           <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Plate, receipt, or provider ID" aria-label="Search payments" />
           <select aria-label="Payment status" value={status} onChange={(event) => setStatus(event.target.value)} className={selectClass}>
             <option value="">All statuses</option>
-            {['Paid', 'Pending', 'Processing', 'Failed', 'Expired', 'Cancelled', 'Refunded', 'PartiallyRefunded'].map((value) => <option key={value}>{value}</option>)}
+            {['Paid', 'Pending', 'Processing', 'Failed', 'Expired', 'Refunded', 'PartiallyRefunded'].map((value) => <option key={value}>{value}</option>)}
+            <option value="Cancelled">Cancelled / abandoned</option>
           </select>
           <select aria-label="Payment provider" value={provider} onChange={(event) => setProvider(event.target.value)} className={selectClass}>
             <option value="">All providers</option>
@@ -179,6 +187,9 @@ export function PaymentsPage() {
             <div className="flex flex-wrap gap-2"><Button type="submit" variant="secondary"><Search className="h-4 w-4" /> Apply filters</Button><Button type="button" variant="ghost" onClick={clearFilters}>Clear filters</Button></div>
           </div>
         </form>
+        <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+          Cancelled or abandoned PayMongo checkouts are hidden by default. Select <span className="font-semibold text-slate-700">Cancelled</span> to review their audit history.
+        </p>
         {activeFilters.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3"><span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Active filters</span>{activeFilters.map((filter) => <button key={filter.key} type="button" onClick={() => clearFilter(filter.key)} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 ring-1 ring-brand-100 hover:bg-brand-100">{filter.label}<X className="h-3 w-3" /></button>)}</div>}
       </Card>
 
@@ -202,6 +213,41 @@ export function PaymentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function OverrideActivity({ items, isLoading, error }: {
+  items: PaymentOverride[];
+  isLoading: boolean;
+  error: unknown;
+}) {
+  return (
+    <Card className="p-0">
+      <div className="border-b border-slate-100 px-5 py-4">
+        <h2 className="font-bold text-slate-950">Supervisor adjustment activity</h2>
+        <p className="mt-1 text-sm text-slate-500">Complimentary parking, waived balances, and exits approved with an unpaid balance. Override actions remain here; any cash collected during an override is recorded separately as revenue.</p>
+      </div>
+      {isLoading && <div className="p-5"><LoadingState label="Loading supervisor adjustments..." /></div>}
+      {error != null && <div className="p-5"><ErrorState error={error} /></div>}
+      {!isLoading && error == null && items.length === 0 && <div className="p-5"><EmptyState>No supervisor payment adjustments were recorded for this period.</EmptyState></div>}
+      {!isLoading && error == null && items.length > 0 && (
+        <Table>
+          <THead><tr><Th>Time</Th><Th>Plate / location</Th><Th>Adjustment</Th><Th>Reason</Th><Th>Approved by</Th><Th className="text-right">Fee context</Th></tr></THead>
+          <TBody>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <Td>{formatPaymentTimestamp(item.createdAt)}</Td>
+                <Td><p className="font-mono font-semibold uppercase text-slate-950">{item.plateNumberRaw}</p><p className="mt-1 text-xs text-slate-500">{item.locationName}</p></Td>
+                <Td><Badge tone="blue">{item.label}</Badge></Td>
+                <Td className="max-w-72"><span title={item.reason}>{item.reason}</span></Td>
+                <Td>{item.performedBy}</Td>
+                <Td className="text-right text-xs text-slate-600">{overrideFeeContext(item)}</Td>
+              </tr>
+            ))}
+          </TBody>
+        </Table>
+      )}
+    </Card>
   );
 }
 
@@ -230,7 +276,14 @@ function PaymentTable({ rows, sortBy, sortDirection, onSort, onSelect }: { rows:
             <Td className="text-right font-semibold tabular-nums">{formatMoney(row.amount, row.currency)}</Td>
             <Td>{row.provider}</Td>
             <Td>{paymentMethodLabel(row.paymentMethod)}</Td>
-            <Td><Badge tone={paymentTone(row.status)}>{row.status}</Badge></Td>
+            <Td>
+              <div className="flex flex-col items-start gap-1">
+                <Badge tone={paymentTone(row.status)}>{row.status}</Badge>
+                {['Exited', 'Void', 'Cancelled'].includes(row.sessionStatus) && (
+                  <span className="text-[11px] font-semibold text-slate-500">Closed session</span>
+                )}
+              </div>
+            </Td>
             <Td><div className="inline-flex max-w-44 items-center gap-2"><span className="truncate font-mono text-xs text-slate-700" title={row.receiptNumber ?? row.providerPaymentId ?? row.id}>{truncateReference(row.receiptNumber ?? row.providerPaymentId ?? row.id)}</span><button type="button" onClick={() => copyReference(row.receiptNumber ?? row.providerPaymentId ?? row.id)} className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Copy payment reference" title="Copy payment reference">{copied === (row.receiptNumber ?? row.providerPaymentId ?? row.id) ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}</button></div></Td>
             <Td><button type="button" onClick={() => onSelect(row.id)} className="inline-flex items-center gap-1 rounded-md border border-brand-200 px-2.5 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-50">View <ExternalLink className="h-3.5 w-3.5" /></button></Td>
           </tr>
@@ -302,6 +355,7 @@ function setPageAndUrl(nextPage: number, params: URLSearchParams, setParams: (ne
 function prettyJson(value: string) { try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; } }
 function paymentTone(status: string): 'green' | 'amber' | 'red' | 'blue' | 'neutral' { if (status === 'Paid') return 'green'; if (['Pending', 'Processing'].includes(status)) return 'amber'; if (['Failed', 'Expired', 'Cancelled'].includes(status)) return 'red'; if (['Refunded', 'PartiallyRefunded'].includes(status)) return 'blue'; return 'neutral'; }
 function paymentMethodLabel(method: string | null | undefined) { const labels: Record<string, string> = { cash: 'Cash', card: 'Card', gcash: 'GCash', qrph: 'QR Ph' }; return method ? labels[method.toLowerCase()] ?? method : 'Not specified'; }
+function overrideFeeContext(item: PaymentOverride) { if (item.finalFee !== null) return `${formatMoney(item.totalPaid)} paid / ${formatMoney(item.finalFee)} final`; if (item.feeOverride === 0) return 'Complimentary'; return item.feeOverride === null ? 'Recorded adjustment' : `Fee set to ${formatMoney(item.feeOverride)}`; }
 function truncateReference(value: string) { return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value; }
 function paymentPeriodLabel(from: string | null, to: string | null) { if (!from && !to) return 'All dates'; if (from && to) return `${formatDateInput(from)}–${formatDateInput(to)}`; return from ? `From ${formatDateInput(from)}` : `Through ${formatDateInput(to!)}`; }
 function getActiveFilters(params: URLSearchParams) { return ([['search', 'Search', params.get('search')], ['status', 'Status', params.get('status')], ['provider', 'Provider', params.get('provider')], ['paymentMethod', 'Method', params.get('paymentMethod') ? paymentMethodLabel(params.get('paymentMethod')) : null], ['from', 'From', params.get('from') ? formatDateInput(params.get('from')!) : null], ['to', 'To', params.get('to') ? formatDateInput(params.get('to')!) : null]] as const).filter(([, , value]) => value).map(([key, label, value]) => ({ key, label: `${label}: ${value}` })); }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Check, Clock } from 'lucide-react';
@@ -18,7 +18,7 @@ import { cn } from '@/components/ui/cn';
 
 const steps = [
   'Basic information',
-  'Base pricing',
+  'Vehicle pricing',
   'Grace and limits',
   'Additional fees',
   'Availability',
@@ -49,23 +49,32 @@ export function RatePlanBuilderPage() {
   const [lostTicketEnabled, setLostTicketEnabled] = useState(DEFAULT_RATE_RULES_FORM.lostTicketFee !== '');
   const [weekendEnabled, setWeekendEnabled] = useState(DEFAULT_RATE_RULES_FORM.weekendMultiplier !== '');
   const [holidayEnabled, setHolidayEnabled] = useState(DEFAULT_RATE_RULES_FORM.holidayMultiplier !== '');
-  const plans = useQuery({ queryKey: ['admin-rate-plans'], queryFn: () => adminApi.listRatePlans(), enabled: isEditingVersion || isDuplicating });
+  const selectedPlan = useQuery({
+    queryKey: ['admin-rate-plan', id ?? duplicateId],
+    queryFn: () => adminApi.getRatePlan((id ?? duplicateId)!),
+    enabled: isEditingVersion || isDuplicating,
+  });
   const versions = useQuery({
     queryKey: ['rate-plan-versions', id],
     queryFn: () => adminApi.listVersions(id!),
     enabled: isEditingVersion,
   });
 
-  const currentPlan = useMemo(() => plans.data?.items.find((plan) => plan.id === id), [id, plans.data?.items]);
-  const duplicateSource = useMemo(() => plans.data?.items.find((plan) => plan.id === duplicateId), [duplicateId, plans.data?.items]);
+  const currentPlan = isEditingVersion ? selectedPlan.data : undefined;
+  const duplicateSource = isDuplicating ? selectedPlan.data : undefined;
 
   useEffect(() => {
     const source = currentPlan ?? duplicateSource;
     if (!source || (isEditingVersion && !versions.data)) return;
     setName(isDuplicating ? `${source.name} copy` : source.name);
     setDescription(source.description);
+    const currentVersion = isEditingVersion
+      ? versions.data?.find((version) => version.versionNumber === source.currentVersionNumber)
+        ?? versions.data?.find((version) => version.effectiveTo === null)
+        ?? versions.data?.[0]
+      : undefined;
     const parsed = isEditingVersion
-      ? parseRateRulesJson(versions.data?.[0]?.rulesJson)
+      ? parseRateRulesJson(currentVersion?.rulesJson ?? source.currentRulesJson ?? undefined)
       : parseRateRulesJson(source.currentRulesJson ?? undefined);
     setRulesState(parsed);
     setLostTicketEnabled(parsed.lostTicketFee !== '');
@@ -101,10 +110,10 @@ export function RatePlanBuilderPage() {
   });
 
   const canContinue = step !== 0 || (name.trim() && description.trim());
-  const isBusy = (isEditingVersion || isDuplicating) && (plans.isLoading || versions.isLoading);
+  const isBusy = (isEditingVersion || isDuplicating) && (selectedPlan.isLoading || versions.isLoading);
 
   if (isBusy) return <LoadingState label="Loading rate-plan builder..." />;
-  if (plans.isError) return <ErrorState error={plans.error} />;
+  if (selectedPlan.isError) return <ErrorState error={selectedPlan.error} />;
   if (versions.isError) return <ErrorState error={versions.error} />;
 
   return (
@@ -277,42 +286,75 @@ function BasicInfoStep({
 }
 
 function BasePricingStep({ rules, onChange }: { rules: RateRulesForm; onChange: (rules: RateRulesForm) => void }) {
-  const rate = rules.defaultRate;
-  const updateRate = <Key extends keyof typeof rate>(key: Key, value: (typeof rate)[Key]) =>
-    onChange({ ...rules, defaultRate: { ...rate, [key]: value } });
-
   return (
     <section className="space-y-4">
-      <SectionTitle title="Base pricing" description="Choose the primary fee model. Only relevant fields appear for the selected model." />
+      <SectionTitle title="Vehicle pricing" description="Configure independent rates for cars and motorcycles." />
+      <RateBlockEditor
+        idPrefix="car"
+        title="Car rate"
+        description="This is also the fallback rate for vans, trucks, and other vehicle types."
+        currency={rules.currency}
+        rate={rules.carRate}
+        onChange={(carRate) => onChange({ ...rules, carRate })}
+      />
+      <RateBlockEditor
+        idPrefix="motorcycle"
+        title="Motorcycle rate"
+        description="Applied when the guard records the vehicle as a motorcycle."
+        currency={rules.currency}
+        rate={rules.motorcycleRate}
+        onChange={(motorcycleRate) => onChange({ ...rules, motorcycleRate })}
+      />
+    </section>
+  );
+}
+
+function RateBlockEditor({ idPrefix, title, description, currency, rate, onChange }: {
+  idPrefix: string;
+  title: string;
+  description: string;
+  currency: string;
+  rate: RateRulesForm['carRate'];
+  onChange: (rate: RateRulesForm['carRate']) => void;
+}) {
+  const updateRate = <Key extends keyof typeof rate>(key: Key, value: (typeof rate)[Key]) =>
+    onChange({ ...rate, [key]: value });
+
+  return (
+    <section className="space-y-4 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+      <div>
+        <h3 className="font-bold text-slate-950">{title}</h3>
+        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+      </div>
       <div className="grid gap-3 md:grid-cols-3">
         {pricingModels.map((model) => (
           <button
             key={model.value}
             type="button"
+            aria-pressed={rate.type === model.value}
             onClick={() => updateRate('type', model.value)}
-            className={cn('rounded-lg p-4 text-left ring-1 transition', rate.type === model.value ? 'bg-brand-50 ring-2 ring-brand-600' : 'bg-white ring-slate-200 hover:bg-slate-50')}
+            className={cn('rounded-lg bg-white p-4 text-left ring-1 transition', rate.type === model.value ? 'ring-2 ring-brand-600' : 'ring-slate-200 hover:bg-slate-50')}
           >
             <span className="block font-bold text-slate-950">{model.label}</span>
             <span className="mt-2 block text-sm leading-6 text-slate-600">{model.example}</span>
           </button>
         ))}
       </div>
-
-      <div className="grid gap-4 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2">
-        {rate.type === 'Flat' && <MoneyField id="flatAmount" label="Flat amount" currency={rules.currency} value={rate.flatAmount} onChange={(value) => updateRate('flatAmount', value)} />}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {rate.type === 'Flat' && <MoneyField id={`${idPrefix}-flatAmount`} label="Flat amount" currency={currency} value={rate.flatAmount} onChange={(value) => updateRate('flatAmount', value)} />}
         {rate.type === 'FirstBlock' && (
           <>
-            <NumberField id="firstHours" label="First block hours" value={rate.firstHours} onChange={(value) => updateRate('firstHours', value)} min={1} />
-            <MoneyField id="firstAmount" label="First block amount" currency={rules.currency} value={rate.firstAmount} onChange={(value) => updateRate('firstAmount', value)} />
-            <MoneyField id="incrementAmount" label="Increment amount" currency={rules.currency} value={rate.incrementAmount} onChange={(value) => updateRate('incrementAmount', value)} />
-            <UnitField id="incrementUnit" label="Increment unit" value={rate.incrementUnit} onChange={(value) => updateRate('incrementUnit', value)} />
+            <NumberField id={`${idPrefix}-firstHours`} label="First block hours" value={rate.firstHours} onChange={(value) => updateRate('firstHours', value)} min={1} />
+            <MoneyField id={`${idPrefix}-firstAmount`} label="First block amount" currency={currency} value={rate.firstAmount} onChange={(value) => updateRate('firstAmount', value)} />
+            <MoneyField id={`${idPrefix}-incrementAmount`} label="Increment amount" currency={currency} value={rate.incrementAmount} onChange={(value) => updateRate('incrementAmount', value)} />
+            <UnitField id={`${idPrefix}-incrementUnit`} label="Increment unit" value={rate.incrementUnit} onChange={(value) => updateRate('incrementUnit', value)} />
           </>
         )}
         {rate.type === 'PerUnit' && (
           <>
-            <MoneyField id="perUnitAmount" label="Amount per unit" currency={rules.currency} value={rate.perUnitAmount} onChange={(value) => updateRate('perUnitAmount', value)} />
-            <UnitField id="perUnit" label="Billing unit" value={rate.perUnit} onChange={(value) => updateRate('perUnit', value)} />
-            <NumberField id="fractionMinutes" label="Fraction size in minutes" value={rate.fractionMinutes} onChange={(value) => updateRate('fractionMinutes', value)} min={1} />
+            <MoneyField id={`${idPrefix}-perUnitAmount`} label="Amount per unit" currency={currency} value={rate.perUnitAmount} onChange={(value) => updateRate('perUnitAmount', value)} />
+            <UnitField id={`${idPrefix}-perUnit`} label="Billing unit" value={rate.perUnit} onChange={(value) => updateRate('perUnit', value)} />
+            <NumberField id={`${idPrefix}-fractionMinutes`} label="Fraction size in minutes" value={rate.fractionMinutes} onChange={(value) => updateRate('fractionMinutes', value)} min={1} />
           </>
         )}
       </div>
@@ -435,7 +477,8 @@ function ReviewStep({ isEditingVersion, name, description, rules }: { isEditingV
         <ReviewItem label="Rate plan" value={name || 'Not named'} />
         <ReviewItem label="Description" value={description || 'Not described'} />
         <ReviewItem label="Currency" value={rules.currency} />
-        <ReviewItem label="Pricing" value={rules.defaultRate.type} />
+        <ReviewItem label="Car pricing" value={rules.carRate.type} />
+        <ReviewItem label="Motorcycle pricing" value={rules.motorcycleRate.type} />
       </dl>
     </section>
   );

@@ -84,7 +84,7 @@ export const workspaces: WorkspaceDefinition[] = [
         items: [
           { label: 'Locations', to: '/admin/locations', icon: MapPin },
           { label: 'Parking sessions', to: '/admin/sessions', icon: CarFront },
-          { label: 'Payments', to: '/admin/payments', icon: CircleDollarSign },
+          { label: 'Revenue & payments', to: '/admin/payments', icon: CircleDollarSign },
         ],
       },
       {
@@ -98,7 +98,7 @@ export const workspaces: WorkspaceDefinition[] = [
       },
       {
         label: 'Analytics',
-        items: [{ label: 'Reports', to: '/admin/reports', icon: BarChart3 }],
+        items: [{ label: 'Operations overview', to: '/admin/reports', icon: BarChart3 }],
       },
     ],
   },

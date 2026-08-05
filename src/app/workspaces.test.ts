@@ -30,12 +30,12 @@ describe('workspace navigation model', () => {
       'Dashboard',
       'Locations',
       'Parking sessions',
-      'Payments',
+      'Revenue & payments',
       'Users',
       'Rate plans',
       'Payment settings',
       'Branding',
-      'Reports',
+      'Operations overview',
     ]);
     expect(getNavigationGroups(guard, ['Guard']).flatMap((group) => group.items.map((item) => item.label))).toEqual([
       'Vehicle entry',

@@ -19,14 +19,18 @@ export function RatePlanSummary({ rules }: { rules: RateRulesForm }) {
       </dl>
       <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Example charges</p>
-        <dl className="mt-3 space-y-2 text-sm">
+        <div className="mt-3 grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-2 text-sm">
+          <span />
+          <span className="text-right text-xs font-bold text-slate-500">Car</span>
+          <span className="text-right text-xs font-bold text-slate-500">Motorcycle</span>
           {sampleHours.map((hours) => (
-            <div key={hours} className="flex justify-between gap-3">
-              <dt className="text-slate-500">{hours}-hour stay</dt>
-              <dd className="font-semibold text-slate-900">{formatMoney(calculateSampleCharge(rules, hours), rules.currency)}</dd>
+            <div key={hours} className="contents">
+              <span className="text-slate-500">{hours}-hour stay</span>
+              <span className="text-right font-semibold text-slate-900">{formatMoney(calculateSampleCharge(rules.carRate, rules.entryGraceMinutes, hours), rules.currency)}</span>
+              <span className="text-right font-semibold text-slate-900">{formatMoney(calculateSampleCharge(rules.motorcycleRate, rules.entryGraceMinutes, hours), rules.currency)}</span>
             </div>
           ))}
-        </dl>
+        </div>
         {rules.enableOvernight && (
           <p className="mt-3 text-xs leading-5 text-slate-500">
             Overnight fee is added when a stay overlaps the configured overnight window.
@@ -46,11 +50,10 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function calculateSampleCharge(rules: RateRulesForm, hours: number) {
-  const rate = rules.defaultRate;
+function calculateSampleCharge(rate: RateRulesForm['carRate'], entryGraceMinutes: number, hours: number) {
   let amount = 0;
 
-  if (hours * 60 <= rules.entryGraceMinutes) {
+  if (hours * 60 <= entryGraceMinutes) {
     amount = 0;
   } else if (rate.type === 'Flat') {
     amount = rate.flatAmount;
