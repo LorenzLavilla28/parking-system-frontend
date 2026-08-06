@@ -90,8 +90,23 @@ export interface RecordEntryInput {
   entryPhotoUrl?: string | null;
 }
 
+export interface PlateScanResponse {
+  detected: boolean;
+  plateNumber: string | null;
+  confidence: number | null;
+  ocrConfidence: number | null;
+  boundingBox: { left: number; top: number; width: number; height: number } | null;
+  imageWidth: number | null;
+  imageHeight: number | null;
+}
+
 export const guardApi = {
   locations: () => api.get<GuardLocation[]>('/api/guard/locations'),
+  scanPlate: (image: Blob | File) => {
+    const form = new FormData();
+    form.append('image', image, image instanceof File ? image.name : 'camera-frame.jpg');
+    return api.post<PlateScanResponse>('/api/guard/plate-scan', form);
+  },
   recordEntry: (body: RecordEntryInput) => api.post<EntryTicket>('/api/guard/entries', body),
   searchSessions: (params: { plate?: string; locationId?: string; activeOnly?: boolean; page?: number; pageSize?: number }) =>
     api.get<PagedResult<SessionSummary>>('/api/guard/sessions', { params }),
