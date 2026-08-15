@@ -26,6 +26,28 @@ npm test           # Vitest unit/component tests
 npm run typecheck  # types only
 ```
 
+## PT-210 thermal printing
+
+The guard entry ticket prints directly to a paired PT-210 through the Capacitor
+native app. It does not call `window.print()` or open AirPrint. The shared printer
+adapter saves the selected device, reconnects it before a print, and sends a 48 mm
+ESC/POS ticket with a printer-generated QR code.
+
+The PT-210 family is sold with different Bluetooth variants. Android uses the
+printer's Bluetooth Classic/SPP path; iOS uses the BLE/Apple-compatible variant.
+Confirm that the unit advertises one of the BLE service profiles supported by the
+native plugin (FF00/FF02, FFE0/FFE1, or 18F0/2AF1). A Classic-only Android PT-210
+cannot be made directly printable from iOS because iOS does not expose generic
+Bluetooth Classic/SPP to third-party apps.
+
+```bash
+npm run cap:android  # build, sync native plugins, open Android Studio
+npm run cap:ios      # build, sync native plugins, open Xcode (macOS)
+```
+
+Test Bluetooth printing on physical devices; simulators do not provide the
+printer Bluetooth stack.
+
 ## Layout
 ```
 src/

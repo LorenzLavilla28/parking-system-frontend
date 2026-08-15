@@ -62,8 +62,7 @@ export function PaymentSettingsPage() {
       />
 
       <Alert tone="info">
-        Your PayMongo secret key is sent only to the backend and stored in AWS Secrets Manager. It is never saved in
-        the application database or returned to the browser.
+        Your PayMongo secret key is stored securely and is never displayed or saved in the application database.
       </Alert>
 
       {connections.isError && <ErrorState error={connections.error} />}
@@ -171,7 +170,7 @@ export function PaymentSettingsPage() {
 
           {connect.isError && <ErrorState error={connect.error} />}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-slate-500">Only server-side secret keys are accepted. Never use a public key here.</p>
+            <p className="text-xs leading-5 text-slate-500">Use your live secret key. Do not enter a public key.</p>
             <Button type="submit" loading={connect.isPending}>
               {selected?.status === 'Connected' ? 'Save new credentials' : 'Connect PayMongo'}
             </Button>

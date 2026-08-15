@@ -41,6 +41,7 @@ describe('workspace navigation model', () => {
       'Vehicle entry',
       'Active sessions',
       'Exit validation',
+      'Printer setup',
     ]);
   });
 

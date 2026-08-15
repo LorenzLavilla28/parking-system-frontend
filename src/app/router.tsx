@@ -30,6 +30,7 @@ const BrandingSettingsPage = lazy(() => import('@/features/tenant-admin/Branding
 const GuardEntryPage = lazy(() => import('@/features/guard/GuardEntryPage').then((m) => ({ default: m.GuardEntryPage })));
 const GuardSessionsPage = lazy(() => import('@/features/guard/GuardSessionsPage').then((m) => ({ default: m.GuardSessionsPage })));
 const GuardExitPage = lazy(() => import('@/features/guard/GuardExitPage').then((m) => ({ default: m.GuardExitPage })));
+const GuardPrinterPage = lazy(() => import('@/features/guard/GuardPrinterPage').then((m) => ({ default: m.GuardPrinterPage })));
 
 const PlatformTenantsPage = lazy(() => import('@/features/platform-admin/PlatformTenantsPage').then((m) => ({ default: m.PlatformTenantsPage })));
 const PlatformHealthPage = lazy(() => import('@/features/platform-admin/PlatformHealthPage').then((m) => ({ default: m.PlatformHealthPage })));
@@ -96,6 +97,7 @@ export const router = createBrowserRouter([
       { index: true, element: <GuardEntryPage /> },
       { path: 'sessions', element: <GuardSessionsPage /> },
       { path: 'exit', element: <GuardExitPage /> },
+      { path: 'printer', element: <GuardPrinterPage /> },
     ],
   },
 

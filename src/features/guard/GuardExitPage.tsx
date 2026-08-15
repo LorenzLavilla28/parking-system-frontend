@@ -70,6 +70,7 @@ export function GuardExitPage() {
     onSuccess: (res) => {
       setExited({ finalFee: res.finalFee, exitTime: res.exitTime });
       queryClient.invalidateQueries({ queryKey: ['guard-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['guard-entry-active-count'] });
       queryClient.invalidateQueries({ queryKey: ['exit-search'] });
       queryClient.invalidateQueries({ queryKey: ['admin-sessions'] });
     },
@@ -238,7 +239,7 @@ export function GuardExitPage() {
               )}
 
               {status.data.status === 'OverstayDue' && (
-                <Alert tone="error">This session is overdue. Exit approval is unavailable until the outstanding balance is paid.</Alert>
+                <Alert tone="error">This session is overdue. Pay the outstanding balance, or use a supervisor override for an approved exception.</Alert>
               )}
 
               {selected?.allowCashPayment && (
@@ -253,7 +254,7 @@ export function GuardExitPage() {
                 />
               )}
 
-              {status.data.status !== 'OverstayDue' && <details className="rounded-lg bg-white/75 p-4 ring-1 ring-slate-200">
+              <details className="rounded-lg bg-white/75 p-4 ring-1 ring-slate-200">
                 <summary className="cursor-pointer text-sm font-semibold text-slate-700">
                   Supervisor override
                 </summary>
@@ -288,7 +289,7 @@ export function GuardExitPage() {
                     Force approve exit
                   </Button>
                 </div>
-              </details>}
+              </details>
             </div>
           ) : (
             <EmptyState>This session is closed.</EmptyState>

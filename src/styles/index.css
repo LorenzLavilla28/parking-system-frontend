@@ -81,35 +81,3 @@ body {
     min-height: 44px;
   }
 }
-
-/* Entry tickets are the only printable artifact in the app. Keep the
-   application shell out of the printout and center a compact ticket instead. */
-@media print {
-  @page {
-    margin: 0.35in;
-  }
-
-  html,
-  body {
-    background: #fff !important;
-  }
-
-  body * {
-    visibility: hidden !important;
-  }
-
-  .print-ticket,
-  .print-ticket * {
-    visibility: visible !important;
-  }
-
-  .print-ticket {
-    position: absolute !important;
-    top: 0 !important;
-    left: 50% !important;
-    width: 2.85in !important;
-    max-width: calc(100vw - 0.7in) !important;
-    margin: 0 !important;
-    transform: translateX(-50%) !important;
-  }
-}

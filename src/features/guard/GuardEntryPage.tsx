@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CarFront, CircleDot, Printer, Wifi, WifiOff } from 'lucide-react';
+import { AlertTriangle, Bluetooth, CarFront, CircleDot, Wifi, WifiOff } from 'lucide-react';
 import { guardApi, type SessionSummary } from './api';
 import { useGuardLocations } from './useGuardLocations';
 import { EntryTicket } from './EntryTicket';
@@ -9,6 +9,7 @@ import { VehicleTypeSelector } from './VehicleTypeSelector';
 import { PhotoCaptureField } from './PhotoCaptureField';
 import { normalizePlateForSubmit } from './plate';
 import { sessionStatusView } from './sessionStatus';
+import { useSessionRealtime } from '@/lib/realtime/useSessionRealtime';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -17,16 +18,19 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ErrorState, EmptyState } from '@/components/ui/states';
 import { formatDateTime } from '@/lib/format';
+import { getSavedThermalPrinter, isThermalPrinterConnected, isThermalPrintingAvailable } from '@/lib/printing/thermalPrinter';
 
 export function GuardEntryPage() {
   const queryClient = useQueryClient();
   const { selectedId, selected, locations, isLoading } = useGuardLocations();
+  useSessionRealtime({ locationId: selectedId });
   const [plate, setPlate] = useState('');
   const [vehicleType, setVehicleType] = useState<string>(() => localStorage.getItem('parking.lastVehicleType') ?? 'Car');
   const [color, setColor] = useState('');
   const [duplicate, setDuplicate] = useState<SessionSummary | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastEntry, setLastEntry] = useState<{ plate: string; entryTime: string } | null>(null);
+  const [printerConnected, setPrinterConnected] = useState(false);
 
   useEffect(() => {
     const updateOnline = () => setIsOnline(navigator.onLine);
@@ -37,6 +41,22 @@ export function GuardEntryPage() {
       window.removeEventListener('offline', updateOnline);
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refreshPrinterStatus = () => {
+      void isThermalPrinterConnected(selectedId).then((value) => {
+        if (active) setPrinterConnected(value);
+      });
+    };
+
+    refreshPrinterStatus();
+    window.addEventListener('focus', refreshPrinterStatus);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refreshPrinterStatus);
+    };
+  }, [lastEntry, selectedId]);
 
   const activeSessions = useQuery({
     queryKey: ['guard-entry-active-count', selectedId],
@@ -89,7 +109,7 @@ export function GuardEntryPage() {
   };
 
   if (entry.data) {
-    return <EntryTicket ticket={entry.data} onDone={resetForm} />;
+    return <EntryTicket ticket={entry.data} locationId={selectedId} onDone={resetForm} />;
   }
 
   const checkingOrRecording = duplicateCheck.isPending || entry.isPending;
@@ -105,13 +125,21 @@ export function GuardEntryPage() {
   const canSubmit = !submitBlockReason && !checkingOrRecording;
   const activeCount = activeSessions.data?.items.length ?? 0;
   const isFull = !!selected && activeCount >= selected.slotCapacity;
+  const savedPrinter = getSavedThermalPrinter(selectedId);
+  const printerStatus = !isThermalPrintingAvailable()
+    ? 'Not supported on this device'
+    : printerConnected
+      ? 'Connected'
+      : savedPrinter
+        ? 'Ready to connect'
+        : 'Set up on the Printer setup page';
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Gate operations"
         title="Vehicle entry"
-        description="Record the vehicle first. Printing and QR display happen after the session is saved."
+        description="Capture the vehicle details, record the entry, and provide the driver with a ticket."
       />
 
       {!isLoading && locations.length === 0 ? (
@@ -135,7 +163,7 @@ export function GuardEntryPage() {
                 <div>
                   <p className="font-semibold">New parking session</p>
                   <p className="text-sm leading-6 text-slate-300">
-                    The entry is saved before any print action runs, so printer issues never hide a successful entry.
+                    Confirm the vehicle details before recording the entry.
                   </p>
                 </div>
               </div>
@@ -214,21 +242,20 @@ export function GuardEntryPage() {
               />
               <OperationalRow
                 label="Printer"
-                value="Status unavailable"
-                icon={<Printer className="h-4 w-4" />}
-                badge={<StatusBadge tone="neutral" label="Unavailable" />}
+                value={printerStatus}
+                icon={<Bluetooth className="h-4 w-4" />}
+                badge={<StatusBadge tone={printerConnected ? 'success' : 'neutral'} label={printerConnected ? 'Connected' : 'Not connected'} />}
               />
               <OperationalRow
                 label="Active sessions"
-                value={activeSessions.data ? `${activeCount} / ${selected?.slotCapacity ?? '-'}` : activeSessions.isLoading ? 'Loading...' : 'Unavailable'}
+                value={activeSessions.data ? `${activeCount} / ${selected?.slotCapacity ?? '-'}` : activeSessions.isLoading ? 'Loading...' : 'Unable to load'}
                 icon={<CircleDot className="h-4 w-4" />}
               />
               <OperationalRow
                 label="Most recent entry"
-                value={lastEntry ? `${lastEntry.plate} - ${formatDateTime(lastEntry.entryTime)}` : 'No entry recorded in this browser yet'}
+                value={lastEntry ? `${lastEntry.plate} - ${formatDateTime(lastEntry.entryTime)}` : 'No entry recorded yet'}
                 icon={<CarFront className="h-4 w-4" />}
               />
-              <OperationalRow label="Entries today" value="Not available" />
             </div>
           </Card>
         </div>

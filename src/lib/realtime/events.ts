@@ -23,6 +23,7 @@ export function invalidationKeysFor(evt: SessionRealtimeEvent): unknown[][] {
     ['exit-search'],
     ['admin-sessions'],
     ['admin-payments'],
+    ['guard-entry-active-count', evt.parkingLocationId],
     ['exit-status', evt.sessionId],
   ];
 }

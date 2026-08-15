@@ -16,6 +16,7 @@ describe('invalidationKeysFor', () => {
       ['exit-search'],
       ['admin-sessions'],
       ['admin-payments'],
+      ['guard-entry-active-count', 'loc-1'],
       ['exit-status', 'sess-123'],
     ]);
   });
@@ -33,8 +34,9 @@ describe('applySessionEvent', () => {
 
     applySessionEvent(queryClient, event);
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['guard-sessions'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['guard-entry-active-count', 'loc-1'] });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['exit-status', 'sess-123'] });
   });
 });

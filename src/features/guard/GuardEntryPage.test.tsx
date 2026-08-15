@@ -19,6 +19,10 @@ vi.mock('./useGuardLocations', () => ({
   useGuardLocations: vi.fn(),
 }));
 
+vi.mock('@/lib/realtime/useSessionRealtime', () => ({
+  useSessionRealtime: vi.fn(() => 'offline'),
+}));
+
 const searchSessions = vi.mocked(guardApi.searchSessions);
 const recordEntry = vi.mocked(guardApi.recordEntry);
 const mockUseGuardLocations = vi.mocked(useGuardLocations);
@@ -99,10 +103,9 @@ describe('GuardEntryPage', () => {
     expect(screen.getByText('Operations status')).toBeInTheDocument();
     expect(screen.getByText('Network')).toBeInTheDocument();
     expect(screen.getByText('Internet connection detected')).toBeInTheDocument();
-    expect(screen.getByText('Printer')).toBeInTheDocument();
-    expect(screen.getByText('Status unavailable')).toBeInTheDocument();
-    expect(screen.getByText('Entries today')).toBeInTheDocument();
-    expect(screen.getByText('Not available')).toBeInTheDocument();
+    expect(screen.getByText('Scan vehicle plate')).toBeInTheDocument();
+    expect(screen.queryByText('YoloDotNet locates the plate and PaddleOCR reads the characters.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Upload plate image')).not.toBeInTheDocument();
     expect(await screen.findByText('0 / 20')).toBeInTheDocument();
 
     const pageText = document.body.textContent ?? '';
