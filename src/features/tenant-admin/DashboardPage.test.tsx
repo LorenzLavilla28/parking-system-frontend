@@ -52,7 +52,7 @@ function session(overrides: Partial<SessionSummary>): SessionSummary {
     parkingLocationId: 'location-1',
     plateNumberRaw: 'ABC 123',
     vehicleType: 'Car',
-    vehicleColor: null,
+    notes: null,
     entryTime: '2026-06-23T10:00:00.000Z',
     status: 'ActiveUnpaid',
     pricingAvailable: true,
@@ -112,6 +112,9 @@ describe('DashboardPage', () => {
         averageDurationMinutes: 132,
         previousPeriodRevenue: 5900,
         supervisorOverrides: 0,
+        overrideCashRevenue: 0,
+        overrideCashPaymentCount: 0,
+        maximumCapacity: 50,
       },
       revenue: [
         { date: '2026-06-23T00:00:00.000Z', amount: 70, paymentCount: 1 },
@@ -134,10 +137,15 @@ describe('DashboardPage', () => {
   it('renders revenue and payment reporting data', async () => {
     renderDashboard();
 
-    expect(await screen.findByText("Today's revenue")).toBeInTheDocument();
+    expect(await screen.findByText('Settled revenue')).toBeInTheDocument();
+    expect(screen.getByText('Live operations')).toBeInTheDocument();
+    expect(await screen.findByText('4 / 50')).toBeInTheDocument();
+    expect(screen.getByText("Today's performance")).toBeInTheDocument();
+    expect(screen.getByText('Sessions requiring attention')).toBeInTheDocument();
+    expect(screen.getByText('Recent performance · Last 7 days')).toBeInTheDocument();
     expect(await screen.findByText('Settled payments only')).toBeInTheDocument();
     expect(screen.getAllByText(/70/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Revenue overview')).toBeInTheDocument();
+    expect(screen.getByText('Revenue trend')).toBeInTheDocument();
     expect(screen.getByText('Payment mix')).toBeInTheDocument();
     expect(screen.getByText('Cash')).toBeInTheDocument();
 
@@ -148,12 +156,12 @@ describe('DashboardPage', () => {
   it('makes actionable attention items full links to filtered sessions', async () => {
     renderDashboard();
 
-    expect(await screen.findByText('3 open')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Unpaid active sessions, 2 items\. Requires review/i }))
+    expect(await screen.findByText('4 open')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Unpaid active sessions, 2 items\. Needs payment\. View unpaid sessions/i }))
       .toHaveAttribute('href', '/admin/sessions?attention=unpaid');
-    expect(screen.getByRole('link', { name: /Over grace period, 1 item\. Additional payment may be needed/i }))
+    expect(screen.getByRole('link', { name: /Vehicles overstaying, 1 item\. Additional payment may be needed\. View overstays/i }))
       .toHaveAttribute('href', '/admin/sessions?attention=over-grace');
-    expect(screen.getByRole('link', { name: /Paid awaiting exit, 1 item\. Ready for exit validation/i }))
+    expect(screen.getByRole('link', { name: /Paid awaiting exit, 1 item\. Ready for exit validation\. View paid sessions/i }))
       .toHaveAttribute('href', '/admin/sessions?attention=paid-awaiting-exit');
   });
 });

@@ -3,15 +3,13 @@ type Tone = 'neutral' | 'green' | 'amber' | 'red' | 'blue';
 export function sessionStatusView(status: string): { tone: Tone; label: string } {
   switch (status) {
     case 'ActiveUnpaid':
-      return { tone: 'amber', label: 'Unpaid' };
     case 'PaymentPending':
-      return { tone: 'red', label: 'Payment pending' };
     case 'PaidExitWindow':
-      return { tone: 'green', label: 'Paid' };
+      return { tone: 'blue', label: 'Active' };
     case 'OverstayDue':
-      return { tone: 'red', label: 'Overstay due' };
+      return { tone: 'amber', label: 'Overstay' };
     case 'Exited':
-      return { tone: 'neutral', label: 'Exited' };
+      return { tone: 'neutral', label: 'Closed' };
     case 'Void':
       return { tone: 'neutral', label: 'Void' };
     case 'Cancelled':

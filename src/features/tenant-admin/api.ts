@@ -104,6 +104,10 @@ export interface DashboardSummary {
   averageDurationMinutes: number;
   previousPeriodRevenue: number;
   supervisorOverrides: number;
+  overrideCashRevenue: number;
+  overrideCashPaymentCount: number;
+  oldestActiveSessionMinutes?: number;
+  maximumCapacity?: number;
 }
 
 export interface RevenuePoint {
@@ -117,6 +121,8 @@ export interface PaymentMixItem {
   label: string;
   amount: number;
   count: number;
+  overrideAmount?: number;
+  overrideCount?: number;
 }
 
 export interface DashboardReport {
@@ -181,6 +187,7 @@ export interface PaymentQuery {
   sessionId?: string;
   from?: string;
   to?: string;
+  overrideOnly?: boolean;
   sortBy?: 'time' | 'amount';
   sortDirection?: 'asc' | 'desc';
   page?: number;
@@ -211,6 +218,10 @@ export interface PaymentSummary {
   finalFee: number | null;
   totalPaid: number;
   paidExitDeadline: string | null;
+  currentFee?: number | null;
+  currentOutstanding?: number | null;
+  isOverrideRelated?: boolean;
+  overrideLabel?: string | null;
 }
 
 export interface PaymentOverride {
@@ -377,8 +388,8 @@ export const adminApi = {
   archiveRatePlan: (id: string) => api.del<void>(`/api/tenant/rate-plans/${id}`),
 
   // Sessions (admins are permitted on the guard endpoint).
-  listSessions: (params: { plate?: string; activeOnly?: boolean; locationId?: string; page?: number; pageSize?: number }) =>
-    api.get<PagedResult<SessionSummary>>('/api/guard/sessions', { params }),
+  listSessions: (params: { plate?: string; activeOnly?: boolean; locationId?: string; attention?: string; page?: number; pageSize?: number }) =>
+    api.get<PagedResult<SessionSummary> & { attentionCount?: number; unpaidCount?: number; longRunningCount?: number }>('/api/guard/sessions', { params }),
 
   listPayments: (params: PaymentQuery) =>
     api.get<PagedResult<PaymentSummary>>('/api/tenant/payments', { params }),

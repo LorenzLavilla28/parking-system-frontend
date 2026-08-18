@@ -27,6 +27,7 @@ export function ExitStatusBanner({ status }: { status: ExitStatus }) {
       <p className="mt-1 text-center text-3xl font-bold tracking-wider text-slate-900">
         {status.plateNumberRaw}
       </p>
+      {status.notes && <p className="mx-auto mt-4 max-w-sm rounded-lg bg-white/75 px-3 py-2 text-center text-sm font-semibold text-slate-800 ring-1 ring-slate-200">Guard note: {status.notes}</p>}
 
       <dl className="mx-auto mt-5 grid max-w-sm grid-cols-2 gap-3 text-sm">
         <dt className="text-slate-500">Current fee</dt>

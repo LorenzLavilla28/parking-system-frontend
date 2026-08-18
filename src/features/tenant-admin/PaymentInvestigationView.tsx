@@ -14,12 +14,9 @@ export function PaymentInvestigationView({ detail, onBack }: { detail: PaymentDe
   const isActive = !session.exitTime;
   const isOverdue = session.status === 'OverstayDue';
   const hasWebhook = detail.webhooks.length > 0;
-  const confirmationSource = hasWebhook
-    ? 'Provider webhook'
-    : payment.provider === 'Cash'
-      ? 'Recorded by guard'
-      : 'Provider confirmation; no webhook linked';
-  const timeline = detail.timeline.filter((event) => event.type !== 'audit' && event.type !== 'webhook');
+  const timeline = buildPaymentTimeline(detail, isActive, isOverdue);
+  const outstanding = isActive ? session.currentOutstanding : null;
+  const currentFee = isActive ? session.currentFee : null;
 
   return (
     <div className="space-y-5">
@@ -30,23 +27,35 @@ export function PaymentInvestigationView({ detail, onBack }: { detail: PaymentDe
         actions={<Button variant="secondary" onClick={onBack}><ArrowLeft className="h-4 w-4" /> All payments</Button>}
       />
 
-      <Card className="space-y-5">
+      <Card className={`space-y-5 ${isOverdue ? 'ring-2 ring-red-200' : ''}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment status</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Payment and session state</p>
             <p className="mt-1 text-3xl font-bold tracking-tight text-slate-950">{formatMoney(payment.amount, payment.currency)}</p>
             <p className="mt-1 text-sm font-semibold text-slate-700">{payment.plateNumberRaw} · {payment.locationName} · {paymentMethodLabel(payment.paymentMethod)}</p>
           </div>
-          <Badge tone={paymentTone(payment.status)}>{payment.status}</Badge>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Payment</span>
+            <Badge tone={paymentTone(payment.status)}>{payment.status}</Badge>
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Session</span>
+            <Badge tone={isOverdue ? 'red' : sessionTone(session.status)}>{sessionStatusLabel(session.status)}</Badge>
+          </div>
         </div>
+        <div className="grid gap-3 border-y border-slate-100 py-4 sm:grid-cols-3">
+          <FinancialSummary label="Paid amount" value={formatMoney(payment.amount, payment.currency)} />
+          <FinancialSummary label="Current session fee" value={isActive ? moneyOrUnavailable(currentFee, payment.currency) : 'Not applicable after exit'} />
+          <FinancialSummary label="Balance due" value={isActive ? moneyOrUnavailable(outstanding, payment.currency) : 'Not applicable after exit'} emphasis={isActive && (outstanding ?? 0) > 0} />
+        </div>
+        {payment.isOverrideRelated && <div className="rounded-lg bg-blue-50 p-3 text-sm font-semibold text-blue-900 ring-1 ring-blue-200">Override-linked cash payment: this amount was collected while approving an exit with a supervisor override.</div>}
         <div className="grid gap-3 text-sm sm:grid-cols-3">
           <Info label="Paid at" value={payment.paidAt ? formatPaymentTimestamp(payment.paidAt) : 'Not paid'} />
           <Info label="Payment coverage" value={session.paidExitDeadline ? `Until ${formatPaymentTimestamp(session.paidExitDeadline)}` : 'Not available'} />
-          <Info label="Confirmation received by" value={confirmationSource} />
+          <Info label="Payment confirmation" value={payment.provider === 'Cash' ? 'Recorded by guard' : 'Payment confirmed by provider'} />
+          <Info label="Webhook evidence" value={hasWebhook ? 'Available' : 'Not available'} />
         </div>
-        {isOverdue && <div className="flex gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950 ring-1 ring-amber-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" /><div><p className="font-semibold">Vehicle is still parked and may have additional charges.</p><p className="mt-1">The payment covered parking until {session.paidExitDeadline ? formatPaymentTimestamp(session.paidExitDeadline) : 'the recorded exit deadline'}.</p></div></div>}
+        {isOverdue && <div className="flex gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-950 ring-1 ring-red-200"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-700" /><div><p className="font-semibold">Payment coverage expired. This vehicle is still parked and has an estimated balance of {moneyOrUnavailable(outstanding, payment.currency)}.</p><p className="mt-1">Coverage ended {session.paidExitDeadline ? formatPaymentTimestamp(session.paidExitDeadline) : 'at the recorded exit deadline'}.</p></div></div>}
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
-          <Link to={`/admin/payments?sessionId=${session.id}`} className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">Open parking session <ExternalLink className="h-3.5 w-3.5" /></Link>
+          <Link to={`/admin/sessions/${session.id}`} className="inline-flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">View active session <ExternalLink className="h-3.5 w-3.5" /></Link>
           <CopyValue label="Copy payment reference" value={payment.providerPaymentId ?? payment.receiptNumber ?? payment.id} />
         </div>
       </Card>
@@ -59,16 +68,16 @@ export function PaymentInvestigationView({ detail, onBack }: { detail: PaymentDe
           <Definition label="Entry" value={formatPaymentTimestamp(session.entryTime)} />
           <Definition label="Exit" value={session.exitTime ? formatPaymentTimestamp(session.exitTime) : 'Still parked'} />
           <Definition label="Paid through" value={session.paidExitDeadline ? formatPaymentTimestamp(session.paidExitDeadline) : 'Not available'} />
-          <Definition label="Current estimated fee" value={isActive ? moneyOrUnavailable(session.currentFee, payment.currency) : 'Not applicable after exit'} />
+          <Definition label="Current session fee" value={isActive ? moneyOrUnavailable(session.currentFee, payment.currency) : 'Not applicable after exit'} />
           <Definition label="Current outstanding balance" value={isActive ? moneyOrUnavailable(session.currentOutstanding, payment.currency) : 'Not applicable after exit'} />
-          <Definition label="Final fee" value={session.exitTime && session.finalFee != null ? moneyOrUnavailable(session.finalFee, payment.currency) : 'Not available until exit'} />
+          <Definition label="Final fee" value={session.exitTime && session.finalFee != null ? moneyOrUnavailable(session.finalFee, payment.currency) : 'Not available until exit'} muted={!session.exitTime} />
           <Definition label="Session status" value={sessionStatusLabel(session.status)} />
         </dl>
       </Card>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.85fr)]">
         <Card>
-          <h2 className="text-base font-bold text-slate-950">Payment timeline</h2>
+          <h2 className="text-base font-bold text-slate-950">Payment activity</h2>
           <p className="mt-1 text-xs text-slate-500">Times shown in Asia/Manila.</p>
           <div className="mt-5 space-y-4">
             {timeline.map((event, index) => <div key={`${event.at}-${event.type}-${index}`} className="flex gap-3"><span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-brand-600" /><div><p className="text-sm font-semibold text-slate-800">{timelineLabel(event.label)}</p><p className="text-xs text-slate-500">{formatPaymentTimestamp(event.at, true)}{event.detail ? ` · ${event.detail}` : ''}</p></div></div>)}
@@ -82,18 +91,18 @@ export function PaymentInvestigationView({ detail, onBack }: { detail: PaymentDe
       </div>
 
       <details className="rounded-xl bg-white/95 shadow-sm ring-1 ring-slate-200/80">
-        <summary className="cursor-pointer list-none px-5 py-4 text-base font-bold text-slate-950">Provider and audit evidence <span className="ml-2 text-xs font-normal text-slate-500">IDs, webhooks, audit events, and technical details</span></summary>
+        <summary className="cursor-pointer list-none px-5 py-4 text-base font-bold text-slate-950">Payment identifiers and evidence <span className="ml-2 text-xs font-normal text-slate-500">Technical details remain collapsed until needed</span></summary>
         <div className="space-y-5 border-t border-slate-100 p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <section><h3 className="text-sm font-bold text-slate-800">Payment identifiers</h3><div className="mt-3 grid gap-3 sm:grid-cols-2">
             <CopyValue label="Payment ID" value={payment.id} />
             <CopyValue label="Provider payment ID" value={payment.providerPaymentId} />
             <CopyValue label="Provider checkout ID" value={payment.providerCheckoutSessionId} />
             <Definition label="Receipt number" value={payment.receiptNumber ?? 'Not issued'} />
             <Definition label="Customer email" value={payment.customerEmail ?? 'Not supplied'} />
             <Definition label="Recorded by" value={payment.recordedByGuardId ? 'Guard' : 'Online / provider'} />
-          </div>
+          </div></section>
+          <EvidenceList title="Provider events" items={detail.webhooks.map((item) => ({ title: `${item.eventType} · ${item.processingStatus}`, time: item.receivedAt, detail: `${shortId(item.providerEventId)} · hash ${shortId(item.payloadHash)}` }))} empty="No provider webhook evidence is available." />
           <EvidenceList title="Audit evidence" items={detail.audit.map((item) => ({ title: timelineLabel(item.action), time: item.createdAt, detail: [item.reason, item.ipAddress].filter(Boolean).join(' · ') || 'No additional context', technical: item.deviceInformation }))} empty="No audit entries are linked to this payment." />
-          {detail.webhooks.length > 0 ? <EvidenceList title="Provider webhooks" items={detail.webhooks.map((item) => ({ title: `${item.eventType} · ${item.processingStatus}`, time: item.receivedAt, detail: `${shortId(item.providerEventId)} · hash ${shortId(item.payloadHash)}` }))} empty="No linked provider webhook is available." /> : <div className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600 ring-1 ring-slate-200">No linked webhook is available. This payment was confirmed through the provider status flow.</div>}
         </div>
       </details>
     </div>
@@ -104,8 +113,9 @@ function EvidenceList({ title, items, empty }: { title: string; items: { title: 
   return <section><h3 className="text-sm font-bold text-slate-800">{title}</h3>{items.length === 0 ? <p className="mt-2 text-sm text-slate-500">{empty}</p> : <div className="mt-3 space-y-2">{items.map((item, index) => <div key={`${item.time}-${index}`} className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200"><p className="text-sm font-semibold text-slate-800">{item.title}</p><p className="mt-1 text-xs text-slate-500">{formatPaymentTimestamp(item.time, true)} · {item.detail}</p>{item.technical && <details className="mt-2 text-xs text-slate-500"><summary className="cursor-pointer font-semibold">Show technical details</summary><p className="mt-1 break-all">{item.technical}</p></details>}</div>)}</div>}</section>;
 }
 
+function FinancialSummary({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) { return <div className={`rounded-lg p-3 ring-1 ${emphasis ? 'bg-red-50 ring-red-200' : 'bg-slate-50 ring-slate-100'}`}><p className="text-xs font-semibold text-slate-500">{label}</p><p className={`mt-1 text-lg font-bold tabular-nums ${emphasis ? 'text-red-700' : 'text-slate-900'}`}>{value}</p></div>; }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-100"><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-1 break-words font-semibold text-slate-800">{value}</dd></div>; }
-function Definition({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className="mt-1 break-words font-semibold text-slate-800">{value}</dd></div>; }
+function Definition({ label, value, muted = false }: { label: string; value: string; muted?: boolean }) { return <div><dt className="text-xs font-semibold text-slate-500">{label}</dt><dd className={`mt-1 break-words font-semibold ${muted ? 'text-slate-400' : 'text-slate-800'}`}>{value}</dd></div>; }
 
 function CopyValue({ label, value }: { label: string; value: string | null | undefined }) {
   const [copied, setCopied] = useState(false);
@@ -134,3 +144,19 @@ function timelineLabel(label: string) { return ({ OnlineCheckoutCreated: 'Online
 function prettyJson(value: string) { try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; } }
 function paymentTone(status: string): 'green' | 'amber' | 'red' | 'blue' | 'neutral' { if (status === 'Paid') return 'green'; if (['Pending', 'Processing'].includes(status)) return 'amber'; if (['Failed', 'Expired', 'Cancelled'].includes(status)) return 'red'; if (['Refunded', 'PartiallyRefunded'].includes(status)) return 'blue'; return 'neutral'; }
 function paymentMethodLabel(method: string | null | undefined) { const labels: Record<string, string> = { cash: 'Cash', card: 'Card', gcash: 'GCash', qrph: 'QR Ph' }; return method ? labels[method.toLowerCase()] ?? method : 'Not specified'; }
+function sessionTone(status: string): 'green' | 'amber' | 'red' | 'neutral' { if (status === 'OverstayDue') return 'amber'; if (status === 'PaidExitWindow') return 'green'; if (['Void', 'Cancelled'].includes(status)) return 'red'; return 'neutral'; }
+function buildPaymentTimeline(detail: PaymentDetail, isActive: boolean, isOverdue: boolean): PaymentDetail['timeline'] {
+  const events = detail.timeline.filter((event) => event.type !== 'audit' && event.type !== 'webhook');
+  const labels = new Set(events.map((event) => timelineLabel(event.label).toLowerCase()));
+  const addDerived = (at: string | null | undefined, label: string, detailText: string | null = null) => {
+    if (!at || labels.has(label.toLowerCase())) return;
+    events.push({ at, type: 'derived', label, detail: detailText, status: null });
+    labels.add(label.toLowerCase());
+  };
+  addDerived(detail.payment.createdAt, 'Payment attempt created', `${detail.payment.provider} payment attempt`);
+  addDerived(detail.session.entryTime, 'Parking coverage started');
+  addDerived(detail.payment.paidAt, 'Payment confirmed', `${formatMoney(detail.payment.amount, detail.payment.currency)} paid`);
+  addDerived(detail.session.paidExitDeadline, 'Payment coverage expired');
+  if (isActive && isOverdue) addDerived(new Date().toISOString(), 'Vehicle remained parked', 'Active overstay');
+  return events.sort((a, b) => a.at.localeCompare(b.at));
+}

@@ -48,11 +48,6 @@ export function GuardExitPage() {
     refetchInterval: 30_000,
   });
 
-  useEffect(() => {
-    if (status.data && overrideCashAmount === '')
-      setOverrideCashAmount(status.data.outstanding.toFixed(2));
-  }, [status.data?.sessionId, status.data?.outstanding, overrideCashAmount]);
-
   const qr = useQuery({
     queryKey: ['exit-qr', sessionId],
     queryFn: () => guardApi.getQr(sessionId!),
@@ -177,6 +172,7 @@ export function GuardExitPage() {
                               <p className="mt-1 text-sm text-slate-600">
                                 {session.vehicleType} <span className="text-slate-400">·</span> Entered {formatTime(session.entryTime)} <span className="text-slate-400">·</span> Parked for {elapsedSince(session.entryTime)}
                               </p>
+                              {session.notes && <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 ring-1 ring-amber-200">Guard note: {session.notes}</p>}
                               <p className="mt-2 text-xs text-slate-500">{formatDateTime(session.entryTime).replace(' at ', ' · ')}</p>
                             </div>
                             <div className="flex items-center justify-between gap-4 sm:flex-col sm:items-end">
@@ -273,7 +269,7 @@ export function GuardExitPage() {
                       step="0.01"
                       value={overrideCashAmount}
                       onChange={(event) => setOverrideCashAmount(event.target.value)}
-                      placeholder="0.00"
+                      placeholder={status.data.outstanding.toFixed(2)}
                       inputMode="decimal"
                     />
                     <span className="block text-xs font-normal text-slate-500">Amount Due: {formatMoney(status.data.outstanding, status.data.currency)}. It will appear as cash revenue.</span>

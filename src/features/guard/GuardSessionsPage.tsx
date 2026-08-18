@@ -194,7 +194,7 @@ function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: 
       <THead>
         <tr>
           <Th>Plate</Th>
-          <Th>Vehicle</Th>
+          <Th>Vehicle / notes</Th>
           <Th>Parked for</Th>
           <Th>Total charge</Th>
           <Th>Amount paid</Th>
@@ -210,7 +210,7 @@ function DesktopSessionTable({ sessions, qrSessionId, onToggleQr }: { sessions: 
             <Fragment key={session.id}>
             <tr key={session.id}>
               <Td className="py-2.5 font-mono font-bold tracking-wide text-slate-950">{session.plateNumberRaw}</Td>
-              <Td className="py-2.5">{session.vehicleType}{session.vehicleColor ? ` - ${session.vehicleColor}` : ''}</Td>
+              <Td className="py-2.5"><p>{session.vehicleType}</p>{session.notes && <p className="mt-1 max-w-56 text-xs text-slate-500">{session.notes}</p>}</Td>
               <Td className="py-2.5">{formatParkingDuration(session.entryTime)}</Td>
               <Td className="py-2.5">{session.pricingAvailable ? formatMoney(session.currentFee, session.currency) : '—'}</Td>
               <Td className="py-2.5">{formatMoney(session.totalPaid, session.currency)}</Td>
@@ -251,6 +251,7 @@ function MobileSessionCard({ session, qrSessionId, onToggleQr }: { session: Sess
         <p className="mt-2 text-base font-medium text-slate-700">
           {session.vehicleType} · Parked for {formatParkingDuration(session.entryTime)}
         </p>
+        {session.notes && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 ring-1 ring-amber-200">Note: {session.notes}</p>}
         <div className="mt-4 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
           <div>
             <p className="text-sm font-semibold text-slate-500">Balance due</p>

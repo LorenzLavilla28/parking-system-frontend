@@ -27,7 +27,7 @@ export interface SessionSummary {
   locationName?: string;
   plateNumberRaw: string;
   vehicleType: string;
-  vehicleColor: string | null;
+  notes: string | null;
   entryTime: string;
   status: string;
   pricingAvailable: boolean;
@@ -50,6 +50,7 @@ export interface ExitStatus {
   sessionId: string;
   plateNumberRaw: string;
   vehicleType: string;
+  notes: string | null;
   status: string;
   decision: 'Paid' | 'Free' | 'NotPaid' | 'AdditionalPaymentRequired' | 'Closed';
   pricingAvailable: boolean;
@@ -86,7 +87,7 @@ export interface RecordEntryInput {
   parkingLocationId: string;
   plateNumber: string;
   vehicleType: string;
-  vehicleColor?: string | null;
+  notes?: string | null;
   entryPhotoUrl?: string | null;
 }
 

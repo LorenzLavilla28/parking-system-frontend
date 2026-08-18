@@ -29,17 +29,17 @@ export function ResetPasswordPage() {
         ) : (
           <>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950">Set a new password</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Choose a password with at least 10 characters.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Use at least 12 characters with a number and special character.</p>
             <form className="mt-7 space-y-4" onSubmit={(event) => { event.preventDefault(); reset.mutate({ token, newPassword: password }); }} noValidate>
               {error && <Alert tone="error">{error.detail ?? error.title}</Alert>}
               {!token && <Alert tone="error">This reset link is missing its token.</Alert>}
               <FormField label="New password" htmlFor="password">
-                <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={10} required />
+                <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} required />
               </FormField>
               <FormField label="Confirm new password" htmlFor="confirm" error={mismatch ? 'Passwords do not match.' : undefined}>
                 <Input id="confirm" type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} invalid={mismatch} required />
               </FormField>
-              <Button type="submit" fullWidth loading={reset.isPending} disabled={!token || password.length < 10 || mismatch || !confirm}>Reset password</Button>
+              <Button type="submit" fullWidth loading={reset.isPending} disabled={!token || password.length < 12 || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password) || mismatch || !confirm}>Reset password</Button>
             </form>
             <Link className="mt-6 inline-block text-sm font-semibold text-brand-700" to="/login">Back to sign in</Link>
           </>

@@ -52,20 +52,10 @@ export function RatePlansPage() {
       )}
 
       {plans.data && plans.data.items.length > 0 && (
-        <Table>
-          <THead>
-            <tr>
-              <Th>Rate plan</Th>
-              <Th>Pricing summary</Th>
-              <Th>Locations</Th>
-              <Th>Status</Th>
-              <Th>Last updated</Th>
-              <Th className="text-right">Actions</Th>
-            </tr>
-          </THead>
-          <TBody>
+        <>
+          <div className="space-y-3 md:hidden">
             {plans.data.items.map((plan) => (
-              <RatePlanRow
+              <RatePlanCard
                 key={plan.id}
                 plan={plan}
                 assignedLocations={assignedLocationCount(plan.id)}
@@ -73,8 +63,33 @@ export function RatePlansPage() {
                 onHistory={() => setHistoryOf(plan)}
               />
             ))}
-          </TBody>
-        </Table>
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Rate plan</Th>
+                  <Th>Pricing summary</Th>
+                  <Th>Locations</Th>
+                  <Th>Status</Th>
+                  <Th>Last updated</Th>
+                  <Th className="text-right">Actions</Th>
+                </tr>
+              </THead>
+              <TBody>
+                {plans.data.items.map((plan) => (
+                  <RatePlanRow
+                    key={plan.id}
+                    plan={plan}
+                    assignedLocations={assignedLocationCount(plan.id)}
+                    onDetails={() => setDetailsOf(plan)}
+                    onHistory={() => setHistoryOf(plan)}
+                  />
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {historyOf && <ChangeHistoryModal plan={historyOf} onClose={() => setHistoryOf(null)} />}
@@ -107,18 +122,7 @@ function RatePlanRow({
   onHistory: () => void;
 }) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const archive = useMutation({
-    mutationFn: () => adminApi.archiveRatePlan(plan.id),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['admin-rate-plans'] }),
-        queryClient.invalidateQueries({ queryKey: ['admin-locations'] }),
-      ]);
-      setMenuOpen(false);
-    },
-  });
+  const actions = useRatePlanActions(plan, onDetails, onHistory);
 
   const pricingSummary = plan.currentRulesJson
     ? describeRateRules(parseRateRulesJson(plan.currentRulesJson))
@@ -126,8 +130,7 @@ function RatePlanRow({
   const statusTone = plan.status === 'Active' ? 'green' : plan.status === 'Draft' ? 'blue' : 'neutral';
 
   const archivePlan = () => {
-    if (plan.status === 'Archived') return;
-    if (window.confirm(`Archive “${plan.name}”? Locations using it will need another active rate plan.`)) archive.mutate();
+    actions.archivePlan();
   };
 
   return (
@@ -167,36 +170,118 @@ function RatePlanRow({
           <button
             type="button"
             aria-label={`More actions for ${plan.name}`}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((open) => !open)}
+            aria-expanded={actions.menuOpen}
+            onClick={() => actions.setMenuOpen((open) => !open)}
             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
-          {menuOpen && (
-            <div className="absolute bottom-full right-0 z-20 mb-2 w-52 rounded-lg bg-white p-1 text-left shadow-lg ring-1 ring-slate-200">
-              <MenuAction icon={MapPin} onClick={() => { setMenuOpen(false); onDetails(); }}>
-                View details
-              </MenuAction>
-              <MenuAction icon={Pencil} onClick={() => navigate(`/admin/rate-plans/new?duplicate=${plan.id}`)}>
-                Duplicate rate plan
-              </MenuAction>
-              <MenuAction icon={History} onClick={() => { setMenuOpen(false); onHistory(); }}>
-                View change history
-              </MenuAction>
-              <MenuAction icon={MapPin} onClick={() => { setMenuOpen(false); navigate('/admin/locations'); }}>
-                Assign to locations
-              </MenuAction>
-              {plan.status !== 'Archived' && (
-                <MenuAction icon={Archive} danger onClick={archivePlan} disabled={archive.isPending}>
-                  Archive rate plan
-                </MenuAction>
-              )}
-            </div>
-          )}
+          {actions.menuOpen && <RatePlanActionMenu plan={plan} onDetails={onDetails} onHistory={onHistory} onArchive={archivePlan} archivePending={actions.archive.isPending} onClose={() => actions.setMenuOpen(false)} />}
         </div>
       </Td>
     </tr>
+  );
+}
+
+function RatePlanCard({
+  plan,
+  assignedLocations,
+  onDetails,
+  onHistory,
+}: {
+  plan: RatePlan;
+  assignedLocations: number;
+  onDetails: () => void;
+  onHistory: () => void;
+}) {
+  const navigate = useNavigate();
+  const actions = useRatePlanActions(plan, onDetails, onHistory);
+  const pricingSummary = plan.currentRulesJson
+    ? describeRateRules(parseRateRulesJson(plan.currentRulesJson))
+    : plan.description;
+  const statusTone = plan.status === 'Active' ? 'green' : plan.status === 'Draft' ? 'blue' : 'neutral';
+
+  return (
+    <article className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <button type="button" className="block truncate text-left text-base font-bold text-brand-800 hover:text-brand-600 hover:underline" onClick={() => navigate(`/admin/rate-plans/${plan.id}/edit`)}>
+            {plan.name}
+          </button>
+          <p className="mt-1 text-xs text-slate-500">Current pricing · Revision {plan.currentVersionNumber ?? '-'}</p>
+        </div>
+        <Badge tone={statusTone}>{plan.status}</Badge>
+      </div>
+
+      <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Pricing summary</p>
+          <p className="mt-1 text-sm leading-5 text-slate-700">{pricingSummary}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Locations</p><p className="mt-1 flex items-center gap-1.5 font-semibold text-slate-800"><MapPin className="h-3.5 w-3.5 text-slate-400" />{assignedLocations} {assignedLocations === 1 ? 'location' : 'locations'}</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Last updated</p><p className="mt-1 flex items-center gap-1.5 text-slate-700"><CalendarClock className="h-3.5 w-3.5 text-slate-400" />{formatDateTime(plan.updatedAt)}</p></div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
+        <Button className="flex-1" size="sm" variant="secondary" onClick={() => navigate(`/admin/rate-plans/${plan.id}/edit`)}><Pencil className="h-3.5 w-3.5" />Edit</Button>
+        <div className="relative">
+          <button type="button" aria-label={`More actions for ${plan.name}`} aria-expanded={actions.menuOpen} onClick={() => actions.setMenuOpen((open) => !open)} className="rounded-lg p-2 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-100 hover:text-slate-800"><MoreHorizontal className="h-4 w-4" /></button>
+          {actions.menuOpen && <RatePlanActionMenu plan={plan} onDetails={onDetails} onHistory={onHistory} onArchive={actions.archivePlan} archivePending={actions.archive.isPending} onClose={() => actions.setMenuOpen(false)} />}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function useRatePlanActions(plan: RatePlan, onDetails: () => void, onHistory: () => void) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const archive = useMutation({
+    mutationFn: () => adminApi.archiveRatePlan(plan.id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-rate-plans'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-locations'] }),
+      ]);
+      setMenuOpen(false);
+    },
+  });
+
+  const archivePlan = () => {
+    if (plan.status === 'Archived') return;
+    if (window.confirm(`Archive “${plan.name}”? Locations using it will need another active rate plan.`)) archive.mutate();
+  };
+
+  return { navigate, menuOpen, setMenuOpen, archive, archivePlan, onDetails, onHistory };
+}
+
+function RatePlanActionMenu({
+  plan,
+  onDetails,
+  onHistory,
+  onArchive,
+  archivePending,
+  onClose,
+}: {
+  plan: RatePlan;
+  onDetails: () => void;
+  onHistory: () => void;
+  onArchive: () => void;
+  archivePending: boolean;
+  onClose: () => void;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div className="absolute bottom-full right-0 z-20 mb-2 w-56 rounded-lg bg-white p-1 text-left shadow-lg ring-1 ring-slate-200">
+      <MenuAction icon={MapPin} onClick={() => { onClose(); onDetails(); }}>View details</MenuAction>
+      <MenuAction icon={Pencil} onClick={() => { onClose(); navigate(`/admin/rate-plans/new?duplicate=${plan.id}`); }}>Duplicate rate plan</MenuAction>
+      <MenuAction icon={History} onClick={() => { onClose(); onHistory(); }}>View change history</MenuAction>
+      <MenuAction icon={MapPin} onClick={() => { onClose(); navigate('/admin/locations'); }}>Assign to locations</MenuAction>
+      {plan.status !== 'Archived' && <MenuAction icon={Archive} danger onClick={() => { onArchive(); }} disabled={archivePending}>Archive rate plan</MenuAction>}
+    </div>
   );
 }
 

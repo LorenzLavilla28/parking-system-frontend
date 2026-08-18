@@ -48,43 +48,67 @@ export function UsersPage() {
       {users.data && users.data.items.length === 0 && <EmptyState>No users yet.</EmptyState>}
 
       {users.data && users.data.items.length > 0 && (
-        <Table>
-          <THead>
-            <tr>
-              <Th>Name</Th>
-              <Th>Email</Th>
-              <Th>Roles</Th>
-              <Th>Status</Th>
-              <Th />
-            </tr>
-          </THead>
-          <TBody>
+        <>
+          <div className="space-y-3 md:hidden">
             {users.data.items.map((u) => (
-              <tr key={u.id}>
-                <Td className="font-medium text-slate-900">
-                  {u.firstName} {u.lastName}
-                </Td>
-                <Td>{u.email}</Td>
-                <Td className="space-x-1">
-                  {u.roles.map((r) => (
-                    <Badge key={r} tone="blue">
-                      {r.replace('Administrator', ' Admin')}
-                    </Badge>
-                  ))}
-                </Td>
-                <Td>
+              <article key={u.id} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-bold text-slate-950">{u.firstName} {u.lastName}</h2>
+                    <p className="mt-1 break-all text-sm text-slate-600">{u.email}</p>
+                  </div>
                   <Badge tone={u.status === 'Active' ? 'green' : 'neutral'}>{u.status}</Badge>
-                </Td>
-                <Td className="text-right">
-                  <button className="text-sm font-medium text-brand-700 hover:underline" onClick={() => setEditing(u)}>
-                    <Pencil className="mr-1 inline h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                </Td>
-              </tr>
+                </div>
+                <div className="mt-4 border-t border-slate-100 pt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Roles</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {u.roles.map((r) => <Badge key={r} tone="blue">{r.replace('Administrator', ' Admin')}</Badge>)}
+                  </div>
+                </div>
+                <Button type="button" variant="secondary" fullWidth className="mt-4" onClick={() => setEditing(u)}><Pencil className="h-3.5 w-3.5" />Edit user</Button>
+              </article>
             ))}
-          </TBody>
-        </Table>
+          </div>
+          <div className="hidden md:block">
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Name</Th>
+                  <Th>Email</Th>
+                  <Th>Roles</Th>
+                  <Th>Status</Th>
+                  <Th />
+                </tr>
+              </THead>
+              <TBody>
+                {users.data.items.map((u) => (
+                  <tr key={u.id}>
+                    <Td className="font-medium text-slate-900">
+                      {u.firstName} {u.lastName}
+                    </Td>
+                    <Td>{u.email}</Td>
+                    <Td className="space-x-1">
+                      {u.roles.map((r) => (
+                        <Badge key={r} tone="blue">
+                          {r.replace('Administrator', ' Admin')}
+                        </Badge>
+                      ))}
+                    </Td>
+                    <Td>
+                      <Badge tone={u.status === 'Active' ? 'green' : 'neutral'}>{u.status}</Badge>
+                    </Td>
+                    <Td className="text-right">
+                      <button className="text-sm font-medium text-brand-700 hover:underline" onClick={() => setEditing(u)}>
+                        <Pencil className="mr-1 inline h-3.5 w-3.5" />
+                        Edit
+                      </button>
+                    </Td>
+                  </tr>
+                ))}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
 
       {editing && (

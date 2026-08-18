@@ -9,12 +9,14 @@ import { LandingPage } from '@/features/public/LandingPage';
 import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage';
 import { ChangePasswordPage } from '@/features/auth/ChangePasswordPage';
+import { TenantSuspendedPage } from '@/features/auth/TenantSuspendedPage';
 
 // Lazily-loaded pages: each area ships as its own chunk, keeping the public
 // customer bundle lean for slow mobile connections.
 const LocationLookupPage = lazy(() => import('@/features/public/LocationLookupPage').then((m) => ({ default: m.LocationLookupPage })));
 const SessionPage = lazy(() => import('@/features/public/SessionPage').then((m) => ({ default: m.SessionPage })));
 const PaymentStatusPage = lazy(() => import('@/features/public/PaymentStatusPage').then((m) => ({ default: m.PaymentStatusPage })));
+const ProfilePage = lazy(() => import('@/features/auth/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 
 const DashboardPage = lazy(() => import('@/features/tenant-admin/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const LocationsPage = lazy(() => import('@/features/tenant-admin/LocationsPage').then((m) => ({ default: m.LocationsPage })));
@@ -22,6 +24,8 @@ const UsersPage = lazy(() => import('@/features/tenant-admin/UsersPage').then((m
 const RatePlansPage = lazy(() => import('@/features/tenant-admin/RatePlansPage').then((m) => ({ default: m.RatePlansPage })));
 const RatePlanBuilderPage = lazy(() => import('@/features/tenant-admin/RatePlanBuilderPage').then((m) => ({ default: m.RatePlanBuilderPage })));
 const AdminSessionsPage = lazy(() => import('@/features/tenant-admin/AdminSessionsPage').then((m) => ({ default: m.AdminSessionsPage })));
+const SessionDetailsPage = lazy(() => import('@/features/tenant-admin/SessionDetailsPage').then((m) => ({ default: m.SessionDetailsPage })));
+const AdjustmentHistoryPage = lazy(() => import('@/features/tenant-admin/AdjustmentHistoryPage').then((m) => ({ default: m.AdjustmentHistoryPage })));
 const PaymentsPage = lazy(() => import('@/features/tenant-admin/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
 const ReportsPage = lazy(() => import('@/features/tenant-admin/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const PaymentSettingsPage = lazy(() => import('@/features/tenant-admin/PaymentSettingsPage').then((m) => ({ default: m.PaymentSettingsPage })));
@@ -40,6 +44,7 @@ export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
   { path: '/reset-password', element: <ResetPasswordPage /> },
+  { path: '/tenant-suspended', element: <TenantSuspendedPage /> },
   {
     path: '/change-password',
     element: (
@@ -75,6 +80,8 @@ export const router = createBrowserRouter([
       { path: 'rate-plans/new', element: <RatePlanBuilderPage /> },
       { path: 'rate-plans/:id/edit', element: <RatePlanBuilderPage /> },
       { path: 'sessions', element: <AdminSessionsPage /> },
+      { path: 'sessions/:id', element: <SessionDetailsPage /> },
+      { path: 'sessions/adjustments', element: <AdjustmentHistoryPage /> },
       { path: 'payments', element: <PaymentsPage /> },
       {
         path: 'reports',
@@ -82,6 +89,7 @@ export const router = createBrowserRouter([
       },
       { path: 'settings/payments', element: <PaymentSettingsPage /> },
       { path: 'settings/branding', element: <BrandingSettingsPage /> },
+      { path: 'profile', element: <ProfilePage /> },
     ],
   },
 
@@ -98,6 +106,7 @@ export const router = createBrowserRouter([
       { path: 'sessions', element: <GuardSessionsPage /> },
       { path: 'exit', element: <GuardExitPage /> },
       { path: 'printer', element: <GuardPrinterPage /> },
+      { path: 'profile', element: <ProfilePage /> },
     ],
   },
 
@@ -112,6 +121,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <PlatformTenantsPage /> },
       { path: 'health', element: <PlatformHealthPage /> },
+      { path: 'profile', element: <ProfilePage /> },
     ],
   },
 

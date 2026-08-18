@@ -48,7 +48,7 @@ describe('ReportsPage operations overview', () => {
     listLocations.mockResolvedValue({
       items: [{
         id: 'location-1', tenantId: 'tenant-1', name: 'Downtown Garage', slug: 'downtown', address: null,
-        timezone: 'Asia/Manila', status: 'Active', allowCashPayment: true, publicQrCodeUrl: null,
+        timezone: 'Asia/Manila', status: 'Active', allowCashPayment: true, slotCapacity: 50, publicQrCodeUrl: null,
         createdAt: '2026-08-01T00:00:00Z', updatedAt: '2026-08-01T00:00:00Z',
       }],
       page: 1, pageSize: 200, totalCount: 1, totalPages: 1,
@@ -56,7 +56,7 @@ describe('ReportsPage operations overview', () => {
     listSessions.mockResolvedValue({
       items: [{
         id: 'session-1', parkingLocationId: 'location-1', locationName: 'Downtown Garage', plateNumberRaw: 'NCR 1234',
-        vehicleType: 'Car', vehicleColor: null, entryTime: '2026-08-05T09:00:00Z', status: 'OverstayDue',
+        vehicleType: 'Car', notes: null, entryTime: '2026-08-05T09:00:00Z', status: 'OverstayDue',
         pricingAvailable: true, currency: 'PHP', currentFee: 180, outstanding: 180, finalFee: null,
         totalPaid: 0, paidExitDeadline: '2026-08-05T12:00:00Z',
       }],
@@ -68,13 +68,17 @@ describe('ReportsPage operations overview', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Parking Operations' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Live operations' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Performance period' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Needs attention' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Review' }).some((link) => link.getAttribute('href') === '/admin/sessions?attention=over-grace')).toBe(true);
-    expect(screen.getByRole('heading', { name: 'Live parking activity' })).toBeInTheDocument();
-    expect(screen.getByText('NCR 1234')).toBeInTheDocument();
-    expect(screen.getByText('Outstanding balances')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Active parking sessions' })).toBeInTheDocument();
+    expect(screen.getAllByText('NCR 1234')).toHaveLength(3);
+    expect(screen.getByText('Outstanding overstay balance')).toBeInTheDocument();
+    expect(screen.getAllByText('Payment success rate').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('20 / 50 occupied · 40%')).toBeInTheDocument();
     expect(screen.getByText(/360\.00/)).toBeInTheDocument();
-    expect(screen.getByText('₱180.00')).toBeInTheDocument();
+    expect(screen.getAllByText('₱180.00')).toHaveLength(3);
     expect(screen.getByRole('heading', { name: 'Business performance' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Every 3 hours' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send digest/ })).toBeInTheDocument();
@@ -83,7 +87,7 @@ describe('ReportsPage operations overview', () => {
   it('passes the selected location and period to the report and live-session APIs', async () => {
     const user = userEvent.setup();
     renderPage();
-    await screen.findByText('NCR 1234');
+    await screen.findAllByText('NCR 1234');
 
     await user.selectOptions(screen.getByLabelText('Location'), 'location-1');
     await user.selectOptions(screen.getByLabelText('Performance period'), '90');
@@ -141,6 +145,8 @@ function report(): DashboardReport {
       averageDurationMinutes: 152,
       previousPeriodRevenue: 11000,
       supervisorOverrides: 2,
+      overrideCashRevenue: 600,
+      overrideCashPaymentCount: 1,
     },
     revenue: [
       { date: '2026-08-05T00:00:00Z', amount: 12450, paymentCount: 39 },

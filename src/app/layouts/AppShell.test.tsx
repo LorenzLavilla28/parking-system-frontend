@@ -123,6 +123,7 @@ describe('AppShell workspace navigation', () => {
     expect(screen.getByRole('link', { name: 'Operations overview' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Demo Parking Group home' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'PBP Parking home' })).not.toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveClass('w-full', 'max-w-[1680px]', 'mx-auto', 'min-w-0', 'overflow-x-hidden', 'lg:px-8');
   });
 
   it('shows guard-only users the simple gate workflow without a workspace switcher', async () => {
@@ -197,5 +198,15 @@ describe('AppShell workspace navigation', () => {
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Rate plans' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Rate plans' })).toHaveAttribute('title', 'Rate plans');
+  });
+
+  it('remembers a newly collapsed sidebar preference', async () => {
+    const user = userEvent.setup();
+    renderShell('/admin', ['TenantAdministrator']);
+
+    await user.click(await screen.findByRole('button', { name: 'Collapse sidebar' }));
+
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
+    expect(localStorage.getItem('parkingsaas.shell.sidebarCollapsed.v1')).toBe('true');
   });
 });

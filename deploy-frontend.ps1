@@ -40,4 +40,15 @@ aws cloudfront wait invalidation-completed `
   --id $invalidationId
 if ($LASTEXITCODE -ne 0) { throw 'CloudFront invalidation did not complete successfully.' }
 
+Write-Host "Verifying https://$Alias ..." -ForegroundColor Cyan
+try {
+  $response = Invoke-WebRequest -Uri "https://$Alias/" -UseBasicParsing -TimeoutSec 30
+  if ([int]$response.StatusCode -lt 200 -or [int]$response.StatusCode -ge 400) {
+    throw "HTTP $($response.StatusCode)"
+  }
+}
+catch {
+  throw "Public frontend verification failed: $($_.Exception.Message)"
+}
+
 Write-Host "Frontend deployed to https://$Alias" -ForegroundColor Green

@@ -16,7 +16,7 @@ export function formatDateTime(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' }).format(d);
 }
 
-export function formatPaymentTimestamp(iso: string | null | undefined, withSeconds = false): string {
+export function formatPaymentTimestamp(iso: string | null | undefined, withSeconds = false, includeTimezone = true): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
@@ -25,7 +25,7 @@ export function formatPaymentTimestamp(iso: string | null | undefined, withSecon
     timeStyle: withSeconds ? 'medium' : 'short',
     timeZone: 'Asia/Manila',
   }).format(d).replace(' at ', ' · ');
-  return `${time} · Asia/Manila`;
+  return includeTimezone ? `${time} · Asia/Manila` : time;
 }
 
 export function formatDateInput(value: string): string {

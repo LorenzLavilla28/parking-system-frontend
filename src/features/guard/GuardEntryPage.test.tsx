@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuardEntryPage } from './GuardEntryPage';
@@ -57,9 +58,11 @@ function renderEntryPage() {
   });
 
   return render(
-    <QueryClientProvider client={client}>
-      <GuardEntryPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={client}>
+        <GuardEntryPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -133,5 +136,22 @@ describe('GuardEntryPage', () => {
 
     expect(screen.getByRole('button', { name: 'Record entry' })).toBeDisabled();
     expect(screen.getByText('Select a working location before recording an entry.')).toBeInTheDocument();
+  });
+
+  it('submits an operational note with the entry', async () => {
+    const user = userEvent.setup();
+    renderEntryPage();
+
+    await user.type(screen.getByLabelText(/plate number/i), 'abc-123');
+    await user.type(screen.getByLabelText('Notes (optional)'), 'VIP guest - reserved space');
+    await user.click(screen.getByRole('button', { name: 'Record entry' }));
+
+    await waitFor(() => expect(recordEntry).toHaveBeenCalledWith({
+      parkingLocationId: demoLocation.id,
+      plateNumber: 'ABC 123',
+      vehicleType: 'Car',
+      notes: 'VIP guest - reserved space',
+      entryPhotoUrl: null,
+    }));
   });
 });

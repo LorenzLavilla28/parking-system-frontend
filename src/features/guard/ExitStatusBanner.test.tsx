@@ -7,6 +7,7 @@ const overdueStatus: ExitStatus = {
   sessionId: 'session-1',
   plateNumberRaw: 'ABC 1234',
   vehicleType: 'Car',
+  notes: 'VIP guest - reserved space',
   status: 'OverstayDue',
   decision: 'Paid',
   pricingAvailable: true,
@@ -26,5 +27,6 @@ describe('ExitStatusBanner', () => {
     expect(screen.getByText('ADDITIONAL PAYMENT REQUIRED')).toBeInTheDocument();
     expect(screen.queryByText('PAID')).not.toBeInTheDocument();
     expect(screen.getByText(/paid exit window has expired/i)).toBeInTheDocument();
+    expect(screen.getByText('Guard note: VIP guest - reserved space')).toBeInTheDocument();
   });
 });

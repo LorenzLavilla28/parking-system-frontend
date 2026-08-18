@@ -16,6 +16,10 @@ export function ProtectedRoute({ allow, children }: { allow: Role[]; children: R
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  if ((user.tenantStatus === 'Suspended' || user.tenantStatus === 'Archived') && location.pathname !== '/tenant-suspended') {
+    return <Navigate to="/tenant-suspended" replace />;
+  }
+
   if (user.mustChangePassword && location.pathname !== '/change-password') {
     return <Navigate to="/change-password" replace state={{ from: location.pathname }} />;
   }

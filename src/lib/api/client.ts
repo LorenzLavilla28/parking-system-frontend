@@ -39,8 +39,9 @@ async function performSessionRefresh(): Promise<AuthSession | null> {
     const s = res.data.data;
     useAuthStore.getState().setSession(s);
     return s;
-  } catch {
+  } catch (error) {
     useAuthStore.getState().clear();
+    if (isTenantSuspendedError(error)) redirectToTenantSuspended();
     return null;
   }
 }
@@ -59,6 +60,11 @@ http.interceptors.response.use(
     const status = error.response?.status;
     const isAuthCall = typeof config?.url === 'string' && config.url.includes('/api/auth/');
 
+    if (isTenantSuspendedError(error)) {
+      useAuthStore.getState().clear();
+      redirectToTenantSuspended();
+    }
+
     if (status === 401 && config && !config._retried && !isAuthCall && refreshToken()) {
       config._retried = true;
       const refreshedSession = await refreshAuthSession();
@@ -71,6 +77,16 @@ http.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+function isTenantSuspendedError(error: unknown): boolean {
+  if (!(error instanceof axios.AxiosError)) return false;
+  return error.response?.status === 403 && (error.response.data as { code?: string } | undefined)?.code === 'tenant_suspended';
+}
+
+function redirectToTenantSuspended() {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/tenant-suspended')
+    window.location.assign('/tenant-suspended');
+}
 
 /** Performs a request and returns the unwrapped `data` payload, throwing ApiError on failure. */
 export async function request<T>(config: AxiosRequestConfig): Promise<T> {

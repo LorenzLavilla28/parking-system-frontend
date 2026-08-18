@@ -100,6 +100,7 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
         pathname={location.pathname}
         userName={user?.fullName || user?.email || 'Account'}
         email={user?.email}
+        profilePath={profilePathForWorkspace(activeWorkspace.id)}
         logout={logout}
         onCollapseChange={setSidebarCollapsed}
         onWorkspaceSelect={switchWorkspace}
@@ -114,7 +115,7 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
           onOpenNavigation={() => setDrawerOpen(true)}
         />
 
-        <main className="w-full max-w-[1320px] scroll-pt-24 px-4 py-5 sm:px-5 lg:px-6 lg:py-6 xl:px-8">
+        <main className="mx-auto min-w-0 w-full max-w-[1680px] overflow-x-hidden scroll-pt-24 px-4 py-5 sm:px-5 lg:px-8 lg:py-6">
           <Suspense fallback={<LoadingState />}>
             <Outlet />
           </Suspense>
@@ -132,6 +133,7 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
         pathname={location.pathname}
         userName={user?.fullName || user?.email || 'Account'}
         email={user?.email}
+        profilePath={profilePathForWorkspace(activeWorkspace.id)}
         onClose={closeDrawer}
         onNavigate={closeDrawer}
         onWorkspaceSelect={(workspace) => {
@@ -154,6 +156,7 @@ function DesktopSidebar({
   pathname,
   userName,
   email,
+  profilePath,
   logout,
   onCollapseChange,
   onWorkspaceSelect,
@@ -167,6 +170,7 @@ function DesktopSidebar({
   pathname: string;
   userName: string;
   email?: string;
+  profilePath: string;
   logout: ReturnType<typeof useLogout>;
   onCollapseChange: (collapsed: boolean) => void;
   onWorkspaceSelect: (workspace: WorkspaceDefinition) => void;
@@ -201,7 +205,7 @@ function DesktopSidebar({
       {activeWorkspace.id === 'gate-operations' && <div className={cn('border-t border-slate-100', collapsed ? 'p-2.5' : 'p-3')}><GateLocationControl compact={!collapsed} collapsed={collapsed} /></div>}
 
       <div className={cn('border-t border-slate-100', collapsed ? 'p-2.5' : 'p-3')}>
-        <UserMenu userName={userName} email={email} logout={logout} align="sidebar" collapsed={collapsed} />
+        <UserMenu userName={userName} email={email} profilePath={profilePath} logout={logout} align="sidebar" collapsed={collapsed} />
         <button
           type="button"
           onClick={() => onCollapseChange(!collapsed)}
@@ -546,12 +550,14 @@ function SidebarNavigationItem({
 function UserMenu({
   userName,
   email,
+  profilePath,
   logout,
   align = 'left',
   collapsed = false,
 }: {
   userName: string;
   email?: string;
+  profilePath: string;
   logout: ReturnType<typeof useLogout>;
   align?: 'left' | 'right' | 'sidebar';
   collapsed?: boolean;
@@ -622,22 +628,14 @@ function UserMenu({
           </div>
           <button
             type="button"
-            onClick={() => setOpen(false)}
-            className="flex min-h-10 w-full items-center rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-            role="menuitem"
-          >
-            Profile
-          </button>
-          <button
-            type="button"
             onClick={() => {
               setOpen(false);
-              navigate('/change-password');
+              navigate(profilePath);
             }}
             className="flex min-h-10 w-full items-center rounded-lg px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             role="menuitem"
           >
-            Security
+            Profile &amp; Security
           </button>
           <button
             type="button"
@@ -668,6 +666,7 @@ function MobileNavigationDrawer({
   pathname,
   userName,
   email,
+  profilePath,
   onClose,
   onNavigate,
   onWorkspaceSelect,
@@ -682,6 +681,7 @@ function MobileNavigationDrawer({
   pathname: string;
   userName: string;
   email?: string;
+  profilePath: string;
   onClose: () => void;
   onNavigate: () => void;
   onWorkspaceSelect: (workspace: WorkspaceDefinition) => void;
@@ -775,6 +775,13 @@ function MobileNavigationDrawer({
           <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
             <p className="truncate text-sm font-bold text-slate-950">{userName}</p>
             {email && <p className="truncate text-xs text-slate-500">{email}</p>}
+            <Link
+              to={profilePath}
+              onClick={onNavigate}
+              className="mt-3 flex min-h-11 w-full items-center justify-center rounded-lg bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-brand-50 hover:text-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              Profile &amp; Security
+            </Link>
             <button
               type="button"
               onClick={() => logout.mutate()}
@@ -788,6 +795,12 @@ function MobileNavigationDrawer({
       </div>
     </div>
   );
+}
+
+function profilePathForWorkspace(workspaceId: WorkspaceId) {
+  if (workspaceId === 'platform') return '/platform/profile';
+  if (workspaceId === 'gate-operations') return '/guard/profile';
+  return '/admin/profile';
 }
 
 function getFocusableElements(root: HTMLElement | null) {

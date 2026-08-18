@@ -32,6 +32,7 @@ import { cn } from '@/components/ui/cn';
 import { formatDateTime, formatMoney } from '@/lib/format';
 
 type RangeKey = 'today' | '90' | '180' | 'custom';
+type Occupancy = { capacity: number; percent: number } | null;
 
 export function ReportsPage() {
   const queryClient = useQueryClient();
@@ -253,12 +254,13 @@ export function ReportsPage() {
             report={report.data}
             range={range}
             rangeLabel={rangeQuery.label}
-            pendingPayments={pendingCount(report.data.paymentMix)}
+            occupancy={occupancyFor(locations.data?.items ?? [], locationId, report.data.summary.activeSessions)}
           />
 
           <AttentionSection
             overstays={report.data.summary.overGraceSessions}
             pendingPayments={pendingCount(report.data.paymentMix)}
+            failedPayments={failedCount(report.data.paymentMix)}
             failedWebhooks={operations.data?.failedWebhooks ?? 0}
             unpaidSessions={report.data.summary.unpaidSessions}
           />
@@ -277,44 +279,50 @@ export function ReportsPage() {
   );
 }
 
-function KpiGrid({ report, range, rangeLabel, pendingPayments }: {
+function KpiGrid({ report, range, rangeLabel, occupancy }: {
   report: Awaited<ReturnType<typeof adminApi.getDashboardReport>>;
   range: RangeKey;
   rangeLabel: string;
-  pendingPayments: number;
+  occupancy: Occupancy;
 }) {
   const periodDetail = range === 'today' ? 'Today' : rangeLabel;
+  const outcomes = paymentOutcomeCounts(report.paymentMix);
+  const successRate = outcomes.total === 0 ? '—' : `${Math.round((outcomes.successful / outcomes.total) * 100)}%`;
   return (
     <section aria-labelledby="operations-kpis">
       <h2 id="operations-kpis" className="sr-only">Operations metrics</h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <MetricCard icon={CarFront} label="Active vehicles" value={report.summary.activeSessions} detail="Live now" tone="blue" />
-        <MetricCard icon={LogIn} label={range === 'today' ? 'Entries today' : 'Entries'} value={report.summary.periodEntries} detail={periodDetail} tone="slate" />
-        <MetricCard icon={LogOut} label={range === 'today' ? 'Exits today' : 'Exits'} value={report.summary.periodExits} detail={periodDetail} tone="slate" />
-        <MetricCard icon={Banknote} label={range === 'today' ? 'Revenue today' : 'Revenue'} value={formatMoney(report.summary.periodRevenue, report.summary.currency)} detail={periodDetail} tone="green" />
-        <MetricCard icon={TimerReset} label="Overstays" value={report.summary.overGraceSessions} detail="Live now" tone={report.summary.overGraceSessions > 0 ? 'amber' : 'green'} />
-        <MetricCard
-          icon={WalletCards}
-          label="Outstanding balances"
-          value={formatMoney(report.summary.overGraceAmount, report.summary.currency)}
-          detail={`${report.summary.overGraceSessions} overstay ${report.summary.overGraceSessions === 1 ? 'session' : 'sessions'}`}
-          tone={report.summary.overGraceAmount > 0 ? 'amber' : 'green'}
-        />
-        <MetricCard icon={WalletCards} label="Pending payments" value={pendingPayments} detail={periodDetail} tone={pendingPayments > 0 ? 'amber' : 'green'} />
+      <div className="space-y-4">
+        <div><h2 className="text-lg font-bold text-slate-950">Live operations</h2><p className="mt-1 text-sm text-slate-500">Current vehicles, balances, and sessions requiring attention.</p></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard icon={CarFront} label="Active vehicles" value={report.summary.activeSessions} detail={occupancy ? `${report.summary.activeSessions} / ${occupancy.capacity} occupied · ${occupancy.percent}%` : 'Live now'} tone="blue" />
+          <MetricCard icon={TimerReset} label="Overstays" value={report.summary.overGraceSessions} detail="Live now" tone={report.summary.overGraceSessions > 0 ? 'amber' : 'green'} />
+          <MetricCard icon={WalletCards} label="Outstanding overstay balance" value={formatMoney(report.summary.overGraceAmount, report.summary.currency)} detail={`${report.summary.overGraceSessions} overstay ${report.summary.overGraceSessions === 1 ? 'session' : 'sessions'}`} tone={report.summary.overGraceAmount > 0 ? 'amber' : 'green'} />
+          <MetricCard icon={WalletCards} label="Unpaid active sessions" value={report.summary.unpaidSessions} detail="Balance due now" tone={report.summary.unpaidSessions > 0 ? 'amber' : 'green'} />
+        </div>
+        <div className="pt-2"><h2 className="text-lg font-bold text-slate-950">Performance period</h2><p className="mt-1 text-sm text-slate-500">Movement and payment performance for {periodDetail.toLocaleLowerCase()}.</p></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <MetricCard icon={LogIn} label={range === 'today' ? 'Entries today' : 'Entries'} value={report.summary.periodEntries} detail={periodDetail} tone="slate" />
+          <MetricCard icon={LogOut} label={range === 'today' ? 'Exits today' : 'Exits'} value={report.summary.periodExits} detail={periodDetail} tone="slate" />
+          <MetricCard icon={Banknote} label="Settled revenue" value={formatMoney(report.summary.periodRevenue, report.summary.currency)} detail={periodDetail} tone="green" />
+          <MetricCard icon={ShieldCheck} label="Payment success rate" value={successRate} detail={outcomes.total === 0 ? 'No payment attempts' : `${outcomes.successful} successful of ${outcomes.total}`} tone={outcomes.total > 0 && outcomes.successful < outcomes.total ? 'amber' : 'green'} />
+          <MetricCard icon={ShieldCheck} label="Supervisor overrides" value={report.summary.supervisorOverrides} detail="Approved adjustments" tone="blue" />
+        </div>
       </div>
     </section>
   );
 }
 
-function AttentionSection({ overstays, pendingPayments, failedWebhooks, unpaidSessions }: {
+function AttentionSection({ overstays, pendingPayments, failedPayments, failedWebhooks, unpaidSessions }: {
   overstays: number;
   pendingPayments: number;
+  failedPayments: number;
   failedWebhooks: number;
   unpaidSessions: number;
 }) {
   const items = [
     overstays > 0 ? { key: 'overstay', count: overstays, label: 'overstay sessions', action: 'Review', to: '/admin/sessions?attention=over-grace', tone: 'danger' as const } : null,
-    pendingPayments > 0 ? { key: 'pending', count: pendingPayments, label: 'pending payments', action: 'View payments', to: '/admin/payments?status=Pending', tone: 'warning' as const } : null,
+    pendingPayments > 0 ? { key: 'pending', count: pendingPayments, label: 'pending payment attempts', action: 'View payments', to: '/admin/payments?status=Pending', tone: 'warning' as const } : null,
+    failedPayments > 0 ? { key: 'failed', count: failedPayments, label: 'failed payment attempts', action: 'Review failed attempts', to: '/admin/payments?status=Failed', tone: 'danger' as const } : null,
     failedWebhooks > 0 ? { key: 'webhook', count: failedWebhooks, label: 'failed webhooks', action: 'Investigate', to: '/admin/payments?status=Failed', tone: 'danger' as const } : null,
     unpaidSessions > 0 ? { key: 'unpaid', count: unpaidSessions, label: 'unpaid active sessions', action: 'Resolve', to: '/admin/sessions?attention=unpaid', tone: 'warning' as const } : null,
   ].filter((item): item is NonNullable<typeof item> => item !== null);
@@ -359,37 +367,71 @@ function LiveActivitySection({ sessions, total, isLoading, locationId }: {
     <section className="space-y-4" aria-labelledby="live-activity-title">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 id="live-activity-title" className="text-lg font-bold text-slate-950">Live parking activity</h2>
+          <h2 id="live-activity-title" className="text-lg font-bold text-slate-950">Active parking sessions</h2>
           <p className="mt-1 text-sm text-slate-500">Active vehicles ordered by most recent entry. Updated every minute.</p>
         </div>
         <Link to={`/admin/sessions${locationId ? `?locationId=${locationId}` : ''}`} className={buttonClasses({ variant: 'secondary', size: 'sm' })}>
           View all {total > 0 ? total : ''}<ArrowRight className="h-4 w-4" />
         </Link>
       </div>
-      {isLoading && <LoadingState label="Loading live parking activity..." />}
+      {isLoading && <LoadingState label="Loading active parking sessions..." />}
       {!isLoading && sessions.length === 0 && <EmptyState>No vehicles are currently active.</EmptyState>}
       {!isLoading && sessions.length > 0 && (
-        <Table>
-          <THead><tr><Th>Plate number</Th><Th>Location</Th><Th>Entry time</Th><Th>Duration</Th><Th>Status</Th><Th className="text-right">Amount due</Th><Th className="text-right">Action</Th></tr></THead>
-          <TBody>
-            {sessions.map((session) => {
-              const status = sessionStatusView(session.status);
-              return (
-                <tr key={session.id}>
-                  <Td className="font-bold text-slate-950">{session.plateNumberRaw}</Td>
-                  <Td>{session.locationName ?? 'Unknown location'}</Td>
-                  <Td>{formatDateTime(session.entryTime)}</Td>
-                  <Td>{formatDuration(Date.now() - new Date(session.entryTime).getTime())}</Td>
-                  <Td><Badge tone={status.tone}>{status.label}</Badge></Td>
-                  <Td className="text-right font-semibold tabular-nums text-slate-950">{session.pricingAvailable ? formatMoney(session.outstanding, session.currency) : '—'}</Td>
-                  <Td className="text-right"><Link to={`/admin/payments?sessionId=${session.id}`} className="font-semibold text-brand-700 hover:underline">Review</Link></Td>
-                </tr>
-              );
-            })}
-          </TBody>
-        </Table>
+        <>
+          <div className="space-y-3 md:hidden">
+            {sessions.map((session) => <MobileOperationsSessionCard key={session.id} session={session} />)}
+          </div>
+          <div className="hidden md:block xl:hidden">
+            <OperationsCompactTable sessions={sessions} />
+          </div>
+          <div className="hidden xl:block">
+            <Table>
+              <THead><tr><Th>Plate number</Th><Th>Location</Th><Th>Entry time</Th><Th>Duration</Th><Th>Status</Th><Th className="text-right">Amount due</Th><Th className="text-right">Action</Th></tr></THead>
+              <TBody>
+                {sessions.map((session) => {
+                  const status = sessionStatusView(session.status);
+                  return (
+                    <tr key={session.id}>
+                      <Td className="font-bold text-slate-950">{session.plateNumberRaw}</Td>
+                      <Td>{session.locationName ?? 'Unknown location'}</Td>
+                      <Td>{formatDateTime(session.entryTime)}</Td>
+                      <Td>{formatDuration(Date.now() - new Date(session.entryTime).getTime())}</Td>
+                      <Td><Badge tone={status.tone}>{status.label}</Badge></Td>
+                      <Td className="text-right font-semibold tabular-nums text-slate-950">{session.pricingAvailable ? formatMoney(session.outstanding, session.currency) : '—'}</Td>
+                      <Td className="text-right"><Link to={`/admin/sessions/${session.id}`} className="font-semibold text-brand-700 hover:underline">Review</Link></Td>
+                    </tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </div>
+        </>
       )}
     </section>
+  );
+}
+
+function OperationsCompactTable({ sessions }: { sessions: Awaited<ReturnType<typeof adminApi.listSessions>>['items'] }) {
+  return <Table><THead><tr><Th>Plate / location</Th><Th>Duration</Th><Th>Status</Th><Th className="text-right">Amount due</Th><Th className="text-right">Action</Th></tr></THead><TBody>{sessions.map((session) => { const status = sessionStatusView(session.status); return <tr key={session.id}><Td><p className="font-bold text-slate-950">{session.plateNumberRaw}</p><p className="mt-1 text-xs text-slate-500">{session.locationName ?? 'Unknown location'}</p></Td><Td className="whitespace-nowrap">{formatDuration(Date.now() - new Date(session.entryTime).getTime())}</Td><Td><Badge tone={status.tone}>{status.label}</Badge></Td><Td className="text-right font-semibold tabular-nums text-slate-950">{session.pricingAvailable ? formatMoney(session.outstanding, session.currency) : '—'}</Td><Td className="text-right"><Link to={`/admin/sessions/${session.id}`} className="font-semibold text-brand-700 hover:underline">View session</Link></Td></tr>; })}</TBody></Table>;
+}
+
+function MobileOperationsSessionCard({ session }: { session: Awaited<ReturnType<typeof adminApi.listSessions>>['items'][number] }) {
+  const status = sessionStatusView(session.status);
+  return (
+    <article className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate font-mono text-lg font-extrabold tracking-wide text-slate-950">{session.plateNumberRaw}</p>
+          <p className="mt-1 truncate text-sm text-slate-600">{session.locationName ?? 'Unknown location'} · Active for {formatDuration(Date.now() - new Date(session.entryTime).getTime())}</p>
+        </div>
+        <Badge tone={status.tone}>{status.label}</Badge>
+      </div>
+      <div className="mt-4 flex items-end justify-between gap-3 border-t border-slate-100 pt-3">
+        <div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Amount due</p><p className="mt-1 text-xl font-extrabold tabular-nums text-slate-950">{session.pricingAvailable ? formatMoney(session.outstanding, session.currency) : '—'}</p></div>
+        <p className="text-right text-xs text-slate-500">Entered<br />{formatDateTime(session.entryTime)}</p>
+      </div>
+      <Link to={`/admin/sessions/${session.id}`} className={buttonClasses({ variant: 'secondary', size: 'md', fullWidth: true, className: 'mt-4 text-brand-700 ring-brand-200 hover:bg-brand-50' })}>View session <ArrowRight className="h-4 w-4" /></Link>
+    </article>
   );
 }
 
@@ -404,6 +446,7 @@ function BusinessPerformance({ report, rangeLabel }: {
     .reduce((sum, item) => sum + item.count, 0);
   const failedPayments = report.paymentMix.find((item) => item.key === 'failed')?.count ?? 0;
   const paymentTotal = successfulPayments + failedPayments;
+  const successRate = paymentTotal === 0 ? '—' : `${Math.round((successfulPayments / paymentTotal) * 100)}%`;
   const movementMax = Math.max(report.summary.periodEntries, report.summary.periodExits, 1);
   const comparison = revenueComparison(report.summary.periodRevenue, report.summary.previousPeriodRevenue);
 
@@ -432,16 +475,18 @@ function BusinessPerformance({ report, rangeLabel }: {
 
         <Card className="space-y-6">
           <div>
-            <h3 className="font-bold text-slate-950">Payment outcomes</h3>
+            <h3 className="font-bold text-slate-950">Payment success rate</h3>
             <p className="mt-1 text-xs text-slate-500">Successful versus failed attempts</p>
+            <p className="mt-4 text-3xl font-bold tracking-tight text-slate-950">{successRate}</p>
             <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-slate-100">
               <div className="bg-emerald-500" style={{ width: `${paymentTotal ? (successfulPayments / paymentTotal) * 100 : 0}%` }} />
               <div className="bg-red-500" style={{ width: `${paymentTotal ? (failedPayments / paymentTotal) * 100 : 0}%` }} />
             </div>
             <div className="mt-3 flex justify-between text-sm"><span className="text-emerald-700">{successfulPayments} successful</span><span className="text-red-700">{failedPayments} failed</span></div>
+            <Link to="/admin/payments?overrideOnly=true" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:underline">Review override-linked cash <ArrowRight className="h-4 w-4" /></Link>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <PerformanceStat icon={Clock3} label="Average parking duration" value={formatDuration(report.summary.averageDurationMinutes * 60_000)} />
+            <PerformanceStat icon={Clock3} label="Average completed-session duration" value={formatDuration(report.summary.averageDurationMinutes * 60_000)} />
             <PerformanceStat icon={Banknote} label="Previous-period revenue" value={formatMoney(report.summary.previousPeriodRevenue, report.summary.currency)} />
             <PerformanceStat icon={ShieldCheck} label="Supervisor overrides" value={String(report.summary.supervisorOverrides)} />
           </div>
@@ -479,6 +524,25 @@ function MovementBar({ label, value, max, color }: { label: string; value: numbe
 
 function pendingCount(items: Awaited<ReturnType<typeof adminApi.getDashboardReport>>['paymentMix']) {
   return items.find((item) => item.key === 'pending')?.count ?? 0;
+}
+
+function failedCount(items: Awaited<ReturnType<typeof adminApi.getDashboardReport>>['paymentMix']) {
+  return items.find((item) => item.key === 'failed')?.count ?? 0;
+}
+
+function paymentOutcomeCounts(items: Awaited<ReturnType<typeof adminApi.getDashboardReport>>['paymentMix']) {
+  const successful = items
+    .filter((item) => item.key === 'paymongo' || item.key === 'cash')
+    .reduce((sum, item) => sum + item.count, 0);
+  const failed = failedCount(items);
+  return { successful, failed, total: successful + failed };
+}
+
+function occupancyFor(locations: { id: string; slotCapacity?: number }[], locationId: string, activeSessions: number): Occupancy {
+  const scoped = locationId ? locations.filter((location) => location.id === locationId) : locations;
+  if (scoped.length === 0 || scoped.some((location) => !Number.isFinite(location.slotCapacity) || (location.slotCapacity ?? 0) <= 0)) return null;
+  const capacity = scoped.reduce((sum, location) => sum + (location.slotCapacity ?? 0), 0);
+  return capacity > 0 ? { capacity, percent: Math.round((activeSessions / capacity) * 100) } : null;
 }
 
 function reportRange(range: RangeKey, customFrom: string, customTo: string) {

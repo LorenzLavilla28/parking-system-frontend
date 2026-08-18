@@ -24,6 +24,7 @@ body,
 body {
   @apply bg-[#eef2f6] text-slate-900 antialiased;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
 }
 
 ::selection {

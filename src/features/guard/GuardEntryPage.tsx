@@ -11,7 +11,7 @@ import { normalizePlateForSubmit } from './plate';
 import { sessionStatusView } from './sessionStatus';
 import { useSessionRealtime } from '@/lib/realtime/useSessionRealtime';
 import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -26,7 +26,7 @@ export function GuardEntryPage() {
   useSessionRealtime({ locationId: selectedId });
   const [plate, setPlate] = useState('');
   const [vehicleType, setVehicleType] = useState<string>(() => localStorage.getItem('parking.lastVehicleType') ?? 'Car');
-  const [color, setColor] = useState('');
+  const [notes, setNotes] = useState('');
   const [duplicate, setDuplicate] = useState<SessionSummary | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastEntry, setLastEntry] = useState<{ plate: string; entryTime: string } | null>(null);
@@ -70,7 +70,7 @@ export function GuardEntryPage() {
         parkingLocationId: selectedId!,
         plateNumber: normalizePlateForSubmit(plate),
         vehicleType,
-        vehicleColor: color.trim() || null,
+        notes: notes.trim() || null,
         entryPhotoUrl: null,
       }),
     onSuccess: (ticket) => {
@@ -104,7 +104,7 @@ export function GuardEntryPage() {
   const resetForm = () => {
     entry.reset();
     setPlate('');
-    setColor('');
+    setNotes('');
     setDuplicate(null);
   };
 
@@ -119,11 +119,11 @@ export function GuardEntryPage() {
       ? 'Select a working location before recording an entry.'
       : !plate.trim()
         ? 'Enter a plate number to continue.'
-        : selected && (activeSessions.data?.items.length ?? 0) >= selected.slotCapacity
+        : selected && (activeSessions.data?.totalCount ?? activeSessions.data?.items.length ?? 0) >= selected.slotCapacity
           ? 'This location is full. Record an exit before accepting another vehicle.'
         : null;
   const canSubmit = !submitBlockReason && !checkingOrRecording;
-  const activeCount = activeSessions.data?.items.length ?? 0;
+  const activeCount = activeSessions.data?.totalCount ?? activeSessions.data?.items.length ?? 0;
   const isFull = !!selected && activeCount >= selected.slotCapacity;
   const savedPrinter = getSavedThermalPrinter(selectedId);
   const printerStatus = !isThermalPrintingAvailable()
@@ -171,8 +171,8 @@ export function GuardEntryPage() {
               <PlateNumberInput value={plate} onChange={setPlate} autoFocus />
               <VehicleTypeSelector value={vehicleType} onChange={setVehicleType} />
 
-              <FormField label="Vehicle color (optional)" htmlFor="color">
-                <Input id="color" value={color} onChange={(event) => setColor(event.target.value)} placeholder="White" />
+              <FormField label="Notes (optional)" htmlFor="notes">
+                <Textarea id="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="VIP guest, reserved space, or other instructions" maxLength={500} rows={3} />
               </FormField>
 
               <PhotoCaptureField onPlateDetected={setPlate} disabled={checkingOrRecording} />
@@ -185,6 +185,7 @@ export function GuardEntryPage() {
                       <p className="font-semibold">An active parking session already exists for {duplicate.plateNumberRaw}.</p>
                       <p className="mt-1 text-sm">Entered: {formatDateTime(duplicate.entryTime)}</p>
                       <p className="text-sm">Status: {sessionStatusView(duplicate.status).label}</p>
+                      {duplicate.notes && <p className="mt-2 rounded-md bg-white/70 px-3 py-2 text-sm font-medium ring-1 ring-amber-200">Guard note: {duplicate.notes}</p>}
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap justify-end gap-2">
