@@ -56,6 +56,7 @@ export function SessionPage() {
   const { token = '' } = useParams();
   const [email, setEmail] = useState('');
   const [qrPayment, setQrPayment] = useState<Awaited<ReturnType<typeof publicApi.createDynamicQr>> | null>(null);
+  const [paymentRecoveryStarted, setPaymentRecoveryStarted] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [qrHighlighted, setQrHighlighted] = useState(false);
   const qrSectionRef = useRef<HTMLDivElement>(null);
@@ -83,6 +84,20 @@ export function SessionPage() {
   });
   const onlinePaymentAvailable = fee.data?.onlinePaymentAvailable === true;
   const cashPaymentAvailable = fee.data?.cashPaymentAvailable === true;
+
+  const resuming = isResumable(session.data?.paymentStatus ?? '');
+  const activePayment = useQuery({
+    queryKey: ['public-active-payment', token],
+    queryFn: () => publicApi.getActivePayment(token),
+    enabled: checkoutAllowed && onlinePaymentAvailable && resuming && !qrPayment && !paymentRecoveryStarted,
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (!qrPayment && activePayment.data?.qrCodeImageUrl) {
+      setQrPayment(activePayment.data);
+    }
+  }, [activePayment.data, qrPayment]);
 
   const emailIsValid = !email.trim() || emailPattern.test(email.trim());
   const pay = useMutation({
@@ -141,7 +156,6 @@ export function SessionPage() {
 
   const s = session.data;
   const view = paymentStatusView(s.paymentStatus);
-  const resuming = isResumable(s.paymentStatus);
   const overdue = s.paymentStatus === 'AdditionalPaymentRequired' || s.status === 'OverstayDue';
   const amountDue = fee.data ? formatMoney(fee.data.outstanding, fee.data.currency) : formatMoney(s.currentFee ?? 0);
   const qrAmountDue = qrPayment ? formatMoney(qrPayment.amount, qrPayment.currency) : amountDue;
@@ -264,6 +278,9 @@ export function SessionPage() {
               </div>
               {!emailIsValid && <p className="text-sm text-red-600">Enter a valid email address or leave this field blank.</p>}
               {pay.isError && <ErrorState error={pay.error} />}
+              {activePayment.isLoading && resuming && !qrPayment && (
+                <LoadingState label="Restoring your payment QR..." />
+              )}
               {qrPayment?.qrCodeImageUrl && !qrExpired ? (
                 <div
                   ref={qrSectionRef}
@@ -308,6 +325,7 @@ export function SessionPage() {
                     loading={pay.isPending}
                     disabled={!emailIsValid || !fee.data?.pricingAvailable || pay.isPending}
                     onClick={() => {
+                      setPaymentRecoveryStarted(true);
                       setQrPayment(null);
                       pay.mutate();
                     }}

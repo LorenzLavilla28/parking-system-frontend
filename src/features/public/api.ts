@@ -84,6 +84,8 @@ export const publicApi = {
     api.post<Checkout>('/api/customer/payments', body),
   createDynamicQr: (body: { feeQuoteId: string; email: string | null }) =>
     api.post<Checkout>('/api/customer/payments/qr', body),
+  getActivePayment: (token: string) =>
+    api.get<Checkout | null>(`/api/customer/sessions/${token}/payment`),
   getPaymentStatus: (reference: string) =>
     api.get<PaymentStatus>(`/api/customer/payments/${reference}/status`),
 };
