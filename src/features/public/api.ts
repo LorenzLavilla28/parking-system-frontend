@@ -61,6 +61,8 @@ export interface Checkout {
   checkoutUrl: string;
   amount: number;
   currency: string;
+  qrCodeImageUrl: string | null;
+  expiresAt?: string | null;
 }
 
 export interface PaymentStatus {
@@ -80,6 +82,8 @@ export const publicApi = {
   createQuote: (publicToken: string) => api.post<FeeQuote>('/api/customer/fee-quotes', { publicToken }),
   createCheckout: (body: { feeQuoteId: string; email: string | null }) =>
     api.post<Checkout>('/api/customer/payments', body),
+  createDynamicQr: (body: { feeQuoteId: string; email: string | null }) =>
+    api.post<Checkout>('/api/customer/payments/qr', body),
   getPaymentStatus: (reference: string) =>
     api.get<PaymentStatus>(`/api/customer/payments/${reference}/status`),
 };
