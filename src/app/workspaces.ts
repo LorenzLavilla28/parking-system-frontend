@@ -5,6 +5,7 @@ import {
   CarFront,
   ClipboardCheck,
   CircleDollarSign,
+  Gift,
   Gauge,
   HeartPulse,
   Image,
@@ -93,6 +94,7 @@ export const workspaces: WorkspaceDefinition[] = [
         items: [
           { label: 'Users', to: '/admin/users', icon: Users },
           { label: 'Rate plans', to: '/admin/rate-plans', icon: ReceiptText },
+          { label: 'Corporate benefits', to: '/admin/corporate-benefits', icon: Gift },
           { label: 'Payment settings', to: '/admin/settings/payments', icon: Settings },
           { label: 'Branding', to: '/admin/settings/branding', icon: Image },
         ],

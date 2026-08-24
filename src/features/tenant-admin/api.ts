@@ -18,6 +18,8 @@ export interface Location {
   publicQrCodeUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  currentEffectiveFrom?: string | null;
+  currentEffectiveTo?: string | null;
 }
 
 export interface LocationInput {
@@ -108,6 +110,8 @@ export interface DashboardSummary {
   overrideCashPaymentCount: number;
   oldestActiveSessionMinutes?: number;
   maximumCapacity?: number;
+  corporateBenefitSessions?: number;
+  corporateBenefitValue?: number;
 }
 
 export interface RevenuePoint {
@@ -331,6 +335,61 @@ export interface RatePlanVersion {
   createdAt: string;
 }
 
+// ---- Corporate benefits ----------------------------------------------------
+export interface CorporateBenefitWindow {
+  start: string;
+  end: string;
+}
+
+export interface CorporateBenefitRules {
+  windows: CorporateBenefitWindow[];
+  daysOfWeek: string[];
+  holidays: string[];
+  excludeHolidays: boolean;
+  eligibleVehicleTypes: string[];
+  outsideWindowBehavior: string;
+}
+
+export interface CorporateBenefitLocation {
+  parkingLocationId: string;
+  locationName: string;
+  maxConcurrentFreeSessions: number;
+  activeAllocations: number;
+}
+
+export interface CorporateBenefitPlate {
+  id: string;
+  plateNumber: string;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+}
+
+export interface CorporateBenefitProgram {
+  id: string;
+  name: string;
+  description: string;
+  priority: number;
+  status: string;
+  currentVersionNumber: number;
+  locations: CorporateBenefitLocation[];
+  rules: CorporateBenefitRules;
+  plates: CorporateBenefitPlate[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CorporateBenefitInput {
+  name: string;
+  description?: string | null;
+  priority: number;
+  locations: { parkingLocationId: string; maxConcurrentFreeSessions: number }[];
+  rules: CorporateBenefitRules;
+  plateNumbers: string[];
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}
+
 export const adminApi = {
   // Dashboard reporting
   getDashboardReport: (days = 7, filters?: { locationId?: string; from?: string; to?: string }) =>
@@ -386,6 +445,12 @@ export const adminApi = {
   addVersion: (id: string, rulesJson: string) =>
     api.post<RatePlanVersion>(`/api/tenant/rate-plans/${id}/versions`, { rulesJson }),
   archiveRatePlan: (id: string) => api.del<void>(`/api/tenant/rate-plans/${id}`),
+
+  // Corporate benefits
+  listCorporateBenefits: () => api.get<CorporateBenefitProgram[]>('/api/tenant/corporate-benefits'),
+  createCorporateBenefit: (body: CorporateBenefitInput) => api.post<CorporateBenefitProgram>('/api/tenant/corporate-benefits', body),
+  updateCorporateBenefit: (id: string, body: CorporateBenefitInput) => api.put<CorporateBenefitProgram>(`/api/tenant/corporate-benefits/${id}`, body),
+  setCorporateBenefitStatus: (id: string, status: string) => api.post<void>(`/api/tenant/corporate-benefits/${id}/status`, { status }),
 
   // Sessions (admins are permitted on the guard endpoint).
   listSessions: (params: { plate?: string; activeOnly?: boolean; locationId?: string; attention?: string; page?: number; pageSize?: number }) =>

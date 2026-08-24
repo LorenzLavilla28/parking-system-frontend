@@ -19,6 +19,9 @@ export interface EntryTicket {
   paymentUrl: string;
   qrCodeDataUri: string;
   locationName: string;
+  corporateBenefitApplied?: boolean;
+  corporateBenefitProgramName?: string | null;
+  corporateBenefitMessage?: string | null;
 }
 
 export interface SessionSummary {
@@ -37,6 +40,7 @@ export interface SessionSummary {
   finalFee: number | null;
   totalPaid: number;
   paidExitDeadline: string | null;
+  corporateBenefitApplied?: boolean;
 }
 
 export interface SessionQr {

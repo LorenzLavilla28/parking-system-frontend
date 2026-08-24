@@ -30,6 +30,7 @@ const PaymentsPage = lazy(() => import('@/features/tenant-admin/PaymentsPage').t
 const ReportsPage = lazy(() => import('@/features/tenant-admin/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const PaymentSettingsPage = lazy(() => import('@/features/tenant-admin/PaymentSettingsPage').then((m) => ({ default: m.PaymentSettingsPage })));
 const BrandingSettingsPage = lazy(() => import('@/features/tenant-admin/BrandingSettingsPage').then((m) => ({ default: m.BrandingSettingsPage })));
+const CorporateBenefitsPage = lazy(() => import('@/features/tenant-admin/CorporateBenefitsPage').then((m) => ({ default: m.CorporateBenefitsPage })));
 
 const GuardEntryPage = lazy(() => import('@/features/guard/GuardEntryPage').then((m) => ({ default: m.GuardEntryPage })));
 const GuardSessionsPage = lazy(() => import('@/features/guard/GuardSessionsPage').then((m) => ({ default: m.GuardSessionsPage })));
@@ -77,6 +78,7 @@ export const router = createBrowserRouter([
       { path: 'locations', element: <LocationsPage /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'rate-plans', element: <RatePlansPage /> },
+      { path: 'corporate-benefits', element: <CorporateBenefitsPage /> },
       { path: 'rate-plans/new', element: <RatePlanBuilderPage /> },
       { path: 'rate-plans/:id/edit', element: <RatePlanBuilderPage /> },
       { path: 'sessions', element: <AdminSessionsPage /> },

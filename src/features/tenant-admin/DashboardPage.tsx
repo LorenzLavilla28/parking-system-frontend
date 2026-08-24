@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Banknote, CarFront, CircleDollarSign, Clock3, LogIn, LogOut, MoveRight, RefreshCw, WalletCards } from 'lucide-react';
+import { BarChart3, Banknote, CarFront, CircleDollarSign, Clock3, LogIn, LogOut, MoveRight, RefreshCw, ShieldCheck, WalletCards } from 'lucide-react';
 import { adminApi, type DashboardReport, type PaymentMixItem } from './api';
 import { useAuth } from '@/features/auth/hooks';
 import type { SessionSummary } from '@/features/guard/api';
@@ -86,6 +86,10 @@ export function DashboardPage() {
           <MetricCard icon={LogOut} label="Exits" value={todayReport.isLoading ? '...' : (todaySummary?.todayExits ?? 0)} detail="Today" tone="slate" />
           <MetricCard icon={Banknote} label="Settled revenue" value={todayReport.isLoading ? '...' : formatMoney(todaySummary?.todayRevenue ?? 0, todaySummary?.currency)} detail="Today" tone="green" />
           <MetricCard icon={CircleDollarSign} label="Successful payments" value={todayReport.isLoading ? '...' : successfulPayments} detail="Confirmed today" tone="green" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <MetricCard icon={ShieldCheck} label="Corporate benefit uses" value={report.isLoading ? '...' : (summary?.corporateBenefitSessions ?? 0)} detail="Last 7 days" tone="blue" />
+          <MetricCard icon={ShieldCheck} label="Corporate benefit value" value={report.isLoading ? '...' : formatMoney(summary?.corporateBenefitValue ?? 0, summary?.currency)} detail="Free-time value · last 7 days" tone="amber" />
         </div>
       </section>
 

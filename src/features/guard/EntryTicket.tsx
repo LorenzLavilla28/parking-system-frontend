@@ -49,6 +49,15 @@ export function EntryTicket({
         <p className="text-sm text-slate-500">Entry: {formatDateTime(ticket.entryTime)}</p>
       </div>
 
+      {(ticket.corporateBenefitApplied || ticket.corporateBenefitMessage) && (
+        <div className={`rounded-lg px-3 py-2 text-left text-sm ring-1 ${ticket.corporateBenefitApplied ? 'bg-emerald-50 text-emerald-900 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-amber-200'}`} role="status">
+          <p className="font-semibold">
+            {ticket.corporateBenefitApplied ? `${ticket.corporateBenefitProgramName ?? 'Corporate benefit'} applied` : 'Corporate benefit not applied'}
+          </p>
+          {ticket.corporateBenefitMessage && <p className="mt-1 text-xs leading-5">{ticket.corporateBenefitMessage}</p>}
+        </div>
+      )}
+
       <img
         src={ticket.qrCodeDataUri}
         alt="Parking session QR code"

@@ -33,6 +33,7 @@ describe('workspace navigation model', () => {
       'Revenue & payments',
       'Users',
       'Rate plans',
+      'Corporate benefits',
       'Payment settings',
       'Branding',
       'Operations overview',
