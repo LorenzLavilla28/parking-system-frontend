@@ -13,6 +13,7 @@ vi.mock('./api', () => ({
   guardApi: {
     searchSessions: vi.fn(),
     recordEntry: vi.fn(),
+    corporateBenefits: vi.fn(),
   },
 }));
 
@@ -26,6 +27,7 @@ vi.mock('@/lib/realtime/useSessionRealtime', () => ({
 
 const searchSessions = vi.mocked(guardApi.searchSessions);
 const recordEntry = vi.mocked(guardApi.recordEntry);
+const corporateBenefits = vi.mocked(guardApi.corporateBenefits);
 const mockUseGuardLocations = vi.mocked(useGuardLocations);
 
 const demoLocation: GuardLocation = {
@@ -94,6 +96,7 @@ describe('GuardEntryPage', () => {
     mockUseGuardLocations.mockReturnValue(guardLocationState({ selectedId: demoLocation.id, selected: demoLocation }));
     searchSessions.mockResolvedValue(page<SessionSummary>([]));
     recordEntry.mockResolvedValue(ticket());
+    corporateBenefits.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -152,6 +155,29 @@ describe('GuardEntryPage', () => {
       vehicleType: 'Car',
       notes: 'VIP guest - reserved space',
       entryPhotoUrl: null,
+      corporateBenefitProgramId: null,
     }));
+  });
+
+  it('shows shared corporate capacity and submits the selected company', async () => {
+    corporateBenefits.mockResolvedValue([{
+      programId: 'benefit-1',
+      programName: 'Acme Corporation',
+      priority: 0,
+      capacity: 2,
+      activeAllocations: 1,
+      availableSlots: 1,
+      isFull: false,
+    }]);
+    const user = userEvent.setup();
+    renderEntryPage();
+
+    await user.type(screen.getByLabelText(/plate number/i), 'abc-123');
+    await user.click(await screen.findByRole('button', { name: /Corporate benefit.*No corporate benefit/ }));
+    expect(screen.getByRole('option', { name: /Acme Corporation.*1 space available.*1\/2 used/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('option', { name: /Acme Corporation.*1 space available.*1\/2 used/ }));
+    await user.click(screen.getByRole('button', { name: 'Record entry' }));
+
+    await waitFor(() => expect(recordEntry).toHaveBeenCalledWith(expect.objectContaining({ corporateBenefitProgramId: 'benefit-1' })));
   });
 });

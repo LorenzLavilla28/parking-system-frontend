@@ -357,14 +357,6 @@ export interface CorporateBenefitLocation {
   activeAllocations: number;
 }
 
-export interface CorporateBenefitPlate {
-  id: string;
-  plateNumber: string;
-  isActive: boolean;
-  effectiveFrom: string;
-  effectiveTo: string | null;
-}
-
 export interface CorporateBenefitProgram {
   id: string;
   name: string;
@@ -374,7 +366,6 @@ export interface CorporateBenefitProgram {
   currentVersionNumber: number;
   locations: CorporateBenefitLocation[];
   rules: CorporateBenefitRules;
-  plates: CorporateBenefitPlate[];
   createdAt: string;
   updatedAt: string;
 }
@@ -385,7 +376,6 @@ export interface CorporateBenefitInput {
   priority: number;
   locations: { parkingLocationId: string; maxConcurrentFreeSessions: number }[];
   rules: CorporateBenefitRules;
-  plateNumbers: string[];
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
 }

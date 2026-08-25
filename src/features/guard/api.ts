@@ -93,6 +93,17 @@ export interface RecordEntryInput {
   vehicleType: string;
   notes?: string | null;
   entryPhotoUrl?: string | null;
+  corporateBenefitProgramId?: string | null;
+}
+
+export interface GuardCorporateBenefitOption {
+  programId: string;
+  programName: string;
+  priority: number;
+  capacity: number;
+  activeAllocations: number;
+  availableSlots: number;
+  isFull: boolean;
 }
 
 export interface PlateScanResponse {
@@ -113,6 +124,8 @@ export const guardApi = {
     return api.post<PlateScanResponse>('/api/guard/plate-scan', form);
   },
   recordEntry: (body: RecordEntryInput) => api.post<EntryTicket>('/api/guard/entries', body),
+  corporateBenefits: (locationId: string, vehicleType: string) =>
+    api.get<GuardCorporateBenefitOption[]>('/api/guard/entries/corporate-benefits', { params: { locationId, vehicleType } }),
   searchSessions: (params: { plate?: string; locationId?: string; activeOnly?: boolean; page?: number; pageSize?: number }) =>
     api.get<PagedResult<SessionSummary>>('/api/guard/sessions', { params }),
   getSession: (id: string) => api.get<SessionSummary>(`/api/guard/sessions/${id}`),

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Bluetooth, CarFront, CircleDot, Wifi, WifiOff } from 'lucide-react';
-import { guardApi, type SessionSummary } from './api';
+import { AlertTriangle, Bluetooth, CarFront, Check, ChevronDown, CircleDot, Wifi, WifiOff } from 'lucide-react';
+import { guardApi, type GuardCorporateBenefitOption, type SessionSummary } from './api';
 import { useGuardLocations } from './useGuardLocations';
 import { EntryTicket } from './EntryTicket';
 import { PlateNumberInput } from './PlateNumberInput';
@@ -27,6 +27,7 @@ export function GuardEntryPage() {
   const [plate, setPlate] = useState('');
   const [vehicleType, setVehicleType] = useState<string>(() => localStorage.getItem('parking.lastVehicleType') ?? 'Car');
   const [notes, setNotes] = useState('');
+  const [corporateBenefitProgramId, setCorporateBenefitProgramId] = useState('');
   const [duplicate, setDuplicate] = useState<SessionSummary | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [lastEntry, setLastEntry] = useState<{ plate: string; entryTime: string } | null>(null);
@@ -64,6 +65,16 @@ export function GuardEntryPage() {
     enabled: !!selectedId,
   });
 
+  const corporateBenefits = useQuery({
+    queryKey: ['guard-corporate-benefits', selectedId, vehicleType],
+    queryFn: () => guardApi.corporateBenefits(selectedId!, vehicleType),
+    enabled: !!selectedId,
+  });
+
+  useEffect(() => {
+    setCorporateBenefitProgramId('');
+  }, [selectedId, vehicleType]);
+
   const entry = useMutation({
     mutationFn: () =>
       guardApi.recordEntry({
@@ -72,6 +83,7 @@ export function GuardEntryPage() {
         vehicleType,
         notes: notes.trim() || null,
         entryPhotoUrl: null,
+        corporateBenefitProgramId: corporateBenefitProgramId || null,
       }),
     onSuccess: (ticket) => {
       localStorage.setItem('parking.lastVehicleType', vehicleType);
@@ -81,6 +93,7 @@ export function GuardEntryPage() {
       queryClient.invalidateQueries({ queryKey: ['guard-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['admin-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['guard-entry-active-count'] });
+      queryClient.invalidateQueries({ queryKey: ['guard-corporate-benefits', selectedId, vehicleType] });
     },
   });
 
@@ -105,6 +118,7 @@ export function GuardEntryPage() {
     entry.reset();
     setPlate('');
     setNotes('');
+    setCorporateBenefitProgramId('');
     setDuplicate(null);
   };
 
@@ -170,6 +184,14 @@ export function GuardEntryPage() {
 
               <PlateNumberInput value={plate} onChange={setPlate} autoFocus />
               <VehicleTypeSelector value={vehicleType} onChange={setVehicleType} />
+
+              <CorporateBenefitSelector
+                options={corporateBenefits.data ?? []}
+                value={corporateBenefitProgramId}
+                onChange={setCorporateBenefitProgramId}
+                loading={corporateBenefits.isLoading}
+              />
+              {corporateBenefits.isError && <ErrorState error={corporateBenefits.error} />}
 
               <FormField label="Notes (optional)" htmlFor="notes">
                 <Textarea id="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="VIP guest, reserved space, or other instructions" maxLength={500} rows={3} />
@@ -259,6 +281,85 @@ export function GuardEntryPage() {
               />
             </div>
           </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CorporateBenefitSelector({
+  options,
+  value,
+  onChange,
+  loading,
+}: {
+  options: GuardCorporateBenefitOption[];
+  value: string;
+  onChange: (value: string) => void;
+  loading: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedOption = options.find((option) => option.programId === value);
+
+  if (!loading && options.length === 0) return null;
+  return (
+    <div className="relative space-y-1.5">
+      <label htmlFor="corporate-benefit" className="flex items-center gap-2 text-sm font-bold text-slate-800">
+        Corporate benefit
+        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">Optional</span>
+      </label>
+      <button
+        id="corporate-benefit"
+        type="button"
+        aria-label={`Corporate benefit, ${selectedOption?.programName ?? 'No corporate benefit selected'}`}
+        aria-expanded={open}
+        aria-controls="corporate-benefit-options"
+        onClick={() => setOpen((current) => !current)}
+        disabled={loading}
+        className={`flex min-h-[60px] w-full items-center justify-between gap-3 rounded-xl bg-white px-5 py-2.5 text-left shadow-sm ring-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-wait disabled:opacity-70 ${open ? 'ring-2 ring-brand-600' : 'ring-slate-300 hover:ring-slate-400'}`}
+      >
+        <span className="min-w-0">
+          <span className="block text-[11px] font-medium text-slate-500">Selected benefit</span>
+          <span className="block truncate text-sm font-bold text-slate-900">{selectedOption?.programName ?? 'No corporate benefit selected'}</span>
+        </span>
+        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-700 ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div id="corporate-benefit-options" role="listbox" aria-label="Corporate benefit choices" className="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-xl bg-white p-2 shadow-xl ring-1 ring-slate-200">
+          <button
+            type="button"
+            role="option"
+            aria-selected={!value}
+            onClick={() => { onChange(''); setOpen(false); }}
+            className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${!value ? 'bg-sky-100' : 'hover:bg-slate-50'}`}
+          >
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${!value ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-400'}`}><Check className="h-4 w-4" /></span>
+            <span className="text-sm font-bold text-slate-900">No corporate benefit</span>
+          </button>
+          <div className="my-2 border-t border-slate-200" />
+          {options.map((option) => {
+            const selected = option.programId === value;
+            return (
+              <button
+                key={option.programId}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => { onChange(option.programId); setOpen(false); }}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition ${selected ? 'bg-sky-100' : 'hover:bg-slate-50'}`}
+              >
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}><Check className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold text-slate-900">{option.programName}</span>
+                  <span className="block text-xs text-slate-500">{option.isFull ? 'At capacity' : `${option.availableSlots} space${option.availableSlots === 1 ? '' : 's'} available`}</span>
+                </span>
+                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${option.isFull ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-current align-middle" />{option.activeAllocations}/{option.capacity} used
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

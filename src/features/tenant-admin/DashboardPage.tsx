@@ -89,7 +89,7 @@ export function DashboardPage() {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <MetricCard icon={ShieldCheck} label="Corporate benefit uses" value={report.isLoading ? '...' : (summary?.corporateBenefitSessions ?? 0)} detail="Last 7 days" tone="blue" />
-          <MetricCard icon={ShieldCheck} label="Corporate benefit value" value={report.isLoading ? '...' : formatMoney(summary?.corporateBenefitValue ?? 0, summary?.currency)} detail="Free-time value · last 7 days" tone="amber" />
+          <MetricCard icon={ShieldCheck} label="Corporate benefit value" value={report.isLoading ? '...' : formatMoney(summary?.corporateBenefitValue ?? 0, summary?.currency)} detail="Complimentary parking value · last 7 days" tone="amber" />
         </div>
       </section>
 

@@ -42,32 +42,30 @@ describe('CorporateBenefitsPage wizard', () => {
 
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole('button', { name: 'New benefit program' }));
+    await user.click(screen.getByRole('button', { name: 'New corporate benefit' }));
 
     expect(screen.getByRole('heading', { name: 'Basic details' })).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Company / program name'), 'Julicis Benefit');
+    await user.type(screen.getByLabelText('Benefit name'), 'Julicis Benefit');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(screen.getByRole('heading', { name: 'Locations' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Parking locations' })).toBeInTheDocument();
     await user.click(await screen.findByLabelText('Julicis Location'));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: 'Eligibility' })).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Add approved plate number'), 'NJM 1502');
-    await user.click(screen.getByRole('button', { name: 'Add' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByRole('heading', { name: 'Revision (optional)' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('New revision ends (optional)'), { target: { value: '2026-08-30' } });
+    fireEvent.change(screen.getByLabelText('Effective until (optional)'), { target: { value: '2026-08-30' } });
     await user.click(screen.getByRole('button', { name: 'Review changes' }));
 
-    expect(screen.getByText('Review before saving')).toBeInTheDocument();
+    expect(screen.getByText('Review your changes')).toBeInTheDocument();
     expect(screen.getByText('Starts immediately to 2026-08-30')).toBeInTheDocument();
     expect(createCorporateBenefit).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Create benefit program' }));
-    expect(await screen.findByText('Benefit program created')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Create benefit' }));
+    expect(await screen.findByText('Corporate benefit created')).toBeInTheDocument();
     await waitFor(() => expect(listCorporateBenefits.mock.calls.length).toBeGreaterThan(1));
   });
 
@@ -79,13 +77,53 @@ describe('CorporateBenefitsPage wizard', () => {
     const user = userEvent.setup();
 
     renderPage();
-    await user.click(screen.getByRole('button', { name: 'New benefit program' }));
-    await user.type(screen.getByLabelText('Company / program name'), 'Unsaved benefit');
+    await user.click(screen.getByRole('button', { name: 'New corporate benefit' }));
+    await user.type(screen.getByLabelText('Benefit name'), 'Unsaved benefit');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(confirm).toHaveBeenCalledWith('Discard unsaved corporate benefit changes?');
+    expect(confirm).toHaveBeenCalledWith('Discard your unsaved corporate benefit changes?');
     expect(screen.queryByRole('heading', { name: 'New corporate benefit' })).not.toBeInTheDocument();
     confirm.mockRestore();
     await waitFor(() => expect(listCorporateBenefits).toHaveBeenCalled());
   });
+
+  it('hides archived programs until the administrator chooses to view them', async () => {
+    listCorporateBenefits.mockResolvedValue([
+      makeProgram('active-1', 'Julicis Benefit', 'Active'),
+      makeProgram('archived-1', 'Old Benefit', 'Archived'),
+    ]);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByText('Julicis Benefit')).toBeInTheDocument();
+    expect(screen.queryByText('Old Benefit')).not.toBeInTheDocument();
+    expect(screen.getByText('1 archived benefit hidden from the active list')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'View archived benefits' }));
+    expect(await screen.findByText('Old Benefit')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide archived benefits' })).toBeInTheDocument();
+  });
 });
+
+function makeProgram(id: string, name: string, status: string): CorporateBenefitProgram {
+  return {
+    id,
+    name,
+    description: 'Company parking',
+    priority: 0,
+    status,
+    currentVersionNumber: 1,
+    locations: [{ parkingLocationId: 'location-1', locationName: 'Julicis Location', maxConcurrentFreeSessions: 4, activeAllocations: 0 }],
+    rules: {
+      windows: [{ start: '08:00', end: '20:00' }],
+      daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      holidays: [],
+      excludeHolidays: false,
+      eligibleVehicleTypes: ['Car'],
+      outsideWindowBehavior: 'NormalRate',
+    },
+    createdAt: '',
+    updatedAt: '',
+  };
+}

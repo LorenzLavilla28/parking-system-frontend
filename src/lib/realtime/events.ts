@@ -24,6 +24,7 @@ export function invalidationKeysFor(evt: SessionRealtimeEvent): unknown[][] {
     ['admin-sessions'],
     ['admin-payments'],
     ['guard-entry-active-count', evt.parkingLocationId],
+    ['guard-corporate-benefits', evt.parkingLocationId],
     ['exit-status', evt.sessionId],
   ];
 }

@@ -66,6 +66,7 @@ export function GuardExitPage() {
       setExited({ finalFee: res.finalFee, exitTime: res.exitTime });
       queryClient.invalidateQueries({ queryKey: ['guard-sessions'] });
       queryClient.invalidateQueries({ queryKey: ['guard-entry-active-count'] });
+      queryClient.invalidateQueries({ queryKey: ['guard-corporate-benefits', selectedId] });
       queryClient.invalidateQueries({ queryKey: ['exit-search'] });
       queryClient.invalidateQueries({ queryKey: ['admin-sessions'] });
     },
