@@ -11,7 +11,7 @@ import {
   ParkingCircle,
   X,
 } from 'lucide-react';
-import { useAuth, useLogout } from '@/features/auth/hooks';
+import { useAuth, useLogout, useSwitchContext } from '@/features/auth/hooks';
 import { useGuardLocations } from '@/features/guard/useGuardLocations';
 import { getCurrentTenantLogo } from '@/features/tenant-branding/api';
 import { cn } from '@/components/ui/cn';
@@ -30,6 +30,8 @@ import {
 } from '@/app/workspaces';
 import { PRODUCT_NAME } from '@/app/brand';
 import { refreshAuthSession } from '@/lib/api/client';
+import type { AuthContext, Role } from '@/lib/auth/types';
+import { ApiError } from '@/lib/api/types';
 
 const COLLAPSED_KEY = 'parkingsaas.shell.sidebarCollapsed.v1';
 
@@ -41,8 +43,11 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readCollapsedPreference);
+  const [workspaceSwitchError, setWorkspaceSwitchError] = useState<string | null>(null);
+  const sessionRefreshAttempted = useRef(false);
 
-  const authorizedWorkspaces = useMemo(() => getAuthorizedWorkspaces(user?.roles), [user?.roles]);
+  const switchContext = useSwitchContext();
+  const authorizedWorkspaces = useMemo(() => getAuthorizedWorkspaces(user?.roles, user?.availableContexts), [user?.availableContexts, user?.roles]);
   const routeWorkspace = getWorkspaceForPath(location.pathname);
   const activeWorkspace = routeWorkspace ?? getWorkspaceById(workspaceId);
   const navigationGroups = getNavigationGroups(activeWorkspace, user?.roles);
@@ -61,6 +66,14 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
   const tenantLogoUrl = useBlobUrl(activeWorkspace.id === 'platform' ? null : tenantLogo.data);
 
   useEffect(() => {
+    if (!user?.id || sessionRefreshAttempted.current) return;
+    sessionRefreshAttempted.current = true;
+    // Refresh the persisted session once on shell load so newly granted
+    // memberships become visible without requiring a sign-out/sign-in cycle.
+    void refreshAuthSession();
+  }, [user?.id]);
+
+  useEffect(() => {
     if (activeWorkspace.id !== 'platform' && user && !user.tenantName) {
       void refreshAuthSession();
     }
@@ -75,6 +88,22 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
   }, [sidebarCollapsed]);
 
   const switchWorkspace = (workspace: WorkspaceDefinition) => {
+    if (switchContext.isPending) return;
+    setWorkspaceSwitchError(null);
+    const targetTenantId = contextTenantIdForWorkspace(workspace.id, user?.availableContexts, user?.roles);
+    if (user?.availableContexts?.length && targetTenantId === undefined) {
+      setWorkspaceSwitchError('This workspace is no longer available for your account. Refresh and try again.');
+      return;
+    }
+    if (targetTenantId !== undefined && targetTenantId !== user?.tenantId) {
+      switchContext.mutate(targetTenantId, {
+        onSuccess: () => navigate(workspace.defaultPath),
+        onError: (error) => {
+          setWorkspaceSwitchError(error instanceof ApiError ? error.detail ?? error.title : 'Could not switch workspaces. Try again.');
+        },
+      });
+      return;
+    }
     navigate(workspace.defaultPath);
   };
 
@@ -116,6 +145,14 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
         />
 
         <main className="mx-auto min-w-0 w-full max-w-[1680px] overflow-x-hidden scroll-pt-24 px-4 py-5 sm:px-5 lg:px-8 lg:py-6">
+          {workspaceSwitchError && (
+            <div className="mb-4 flex items-start justify-between gap-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200" role="alert">
+              <span>{workspaceSwitchError}</span>
+              <button type="button" className="shrink-0 font-semibold text-red-700 hover:text-red-950" onClick={() => setWorkspaceSwitchError(null)}>
+                Dismiss
+              </button>
+            </div>
+          )}
           <Suspense fallback={<LoadingState />}>
             <Outlet />
           </Suspense>
@@ -144,6 +181,18 @@ export function AppShell({ workspaceId }: { workspaceId: WorkspaceId }) {
       />
     </div>
   );
+}
+
+function contextTenantIdForWorkspace(
+  workspaceId: WorkspaceId,
+  contexts: AuthContext[] | undefined,
+  _roles: Role[] | undefined,
+) {
+  if (!contexts || contexts.length === 0) return undefined;
+  if (workspaceId === 'platform') return contexts.find((context) => context.isPlatform)?.tenantId;
+
+  const required = getWorkspaceById(workspaceId).requiredRoles;
+  return contexts.find((context) => context.roles.some((role) => required.includes(role)))?.tenantId;
 }
 
 function DesktopSidebar({
@@ -196,7 +245,7 @@ function DesktopSidebar({
         </Link>
       </div>
 
-      {activeWorkspace.id !== 'platform' && <div className={cn('border-b border-slate-100', collapsed ? 'p-2.5' : 'p-3')}><WorkspaceSwitcher activeWorkspace={activeWorkspace} authorizedWorkspaces={authorizedWorkspaces} collapsed={collapsed} onSelect={onWorkspaceSelect} /></div>}
+      {authorizedWorkspaces.length > 1 && <div className={cn('border-b border-slate-100', collapsed ? 'p-2.5' : 'p-3')}><WorkspaceSwitcher activeWorkspace={activeWorkspace} authorizedWorkspaces={authorizedWorkspaces} collapsed={collapsed} onSelect={onWorkspaceSelect} /></div>}
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 py-4" aria-label={`${activeWorkspace.label} navigation`}>
         <SidebarNavigation groups={groups} pathname={pathname} collapsed={collapsed} />
@@ -759,7 +808,7 @@ function MobileNavigationDrawer({
         </div>
 
         <div className="space-y-4 border-b border-slate-100 p-4">
-          {activeWorkspace.id !== 'platform' && <WorkspaceSwitcher
+          {authorizedWorkspaces.length > 1 && <WorkspaceSwitcher
               activeWorkspace={activeWorkspace}
               authorizedWorkspaces={authorizedWorkspaces}
               onSelect={onWorkspaceSelect}

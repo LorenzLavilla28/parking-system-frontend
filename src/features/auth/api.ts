@@ -6,6 +6,10 @@ export function login(input: LoginInput): Promise<AuthSession> {
   return api.post<AuthSession>('/api/auth/login', input);
 }
 
+export function switchContext(tenantId: string): Promise<AuthSession> {
+  return api.post<AuthSession>('/api/auth/switch-context', { tenantId });
+}
+
 export function logout(refreshToken: string): Promise<void> {
   return api.post<void>('/api/auth/logout', { refreshToken });
 }

@@ -6,7 +6,24 @@ import { AppProviders } from '@/app/providers';
 import { ProtectedRoute } from '@/app/ProtectedRoute';
 import { AppShell } from './AppShell';
 import { useAuthStore } from '@/lib/auth/store';
-import type { AuthSession, Role } from '@/lib/auth/types';
+import type { AuthContext, AuthSession, Role } from '@/lib/auth/types';
+
+const authApiMocks = vi.hoisted(() => ({
+  switchContext: vi.fn(),
+  logout: vi.fn(),
+}));
+const clientMocks = vi.hoisted(() => ({
+  refreshAuthSession: vi.fn(),
+}));
+
+vi.mock('@/features/auth/api', () => ({
+  switchContext: authApiMocks.switchContext,
+  logout: authApiMocks.logout,
+}));
+
+vi.mock('@/lib/api/client', () => ({
+  refreshAuthSession: clientMocks.refreshAuthSession,
+}));
 
 vi.mock('@/features/guard/api', () => ({
   guardApi: {
@@ -26,7 +43,7 @@ vi.mock('@/features/tenant-branding/api', () => ({
   getCurrentTenantLogo: vi.fn(async () => null),
 }));
 
-function session(roles: Role[]): AuthSession {
+function session(roles: Role[], availableContexts?: AuthContext[], tenantId = 'tenant-1'): AuthSession {
   return {
     accessToken: 'access-token',
     accessTokenExpiresAt: new Date(Date.now() + 60_000).toISOString(),
@@ -34,20 +51,21 @@ function session(roles: Role[]): AuthSession {
     refreshTokenExpiresAt: new Date(Date.now() + 120_000).toISOString(),
     user: {
       id: 'user-1',
-      tenantId: 'tenant-1',
+      tenantId,
       tenantName: 'Demo Parking Group',
       email: 'demo@example.test',
       fullName: 'Demo User',
       roles,
       assignedLocationIds: [],
       mustChangePassword: false,
+      availableContexts,
     },
   };
 }
 
-function renderShell(initialPath: string, roles: Role[]) {
+function renderShell(initialPath: string, roles: Role[], availableContexts?: AuthContext[], tenantId = 'tenant-1') {
   act(() => {
-    useAuthStore.getState().setSession(session(roles));
+    useAuthStore.getState().setSession(session(roles, availableContexts, tenantId));
   });
 
   const router = createMemoryRouter(
@@ -150,6 +168,37 @@ describe('AppShell workspace navigation', () => {
     expect(screen.queryByRole('button', { name: 'Platform Console' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Demo User/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+  });
+
+  it('lets dual-access users switch from the platform console into tenant administration', async () => {
+    const user = userEvent.setup();
+    const contexts: AuthContext[] = [
+      {
+        tenantId: 'tenant-1',
+        tenantName: 'Demo Parking Group',
+        tenantStatus: 'Active',
+        roles: ['TenantAdministrator'],
+        assignedLocationIds: [],
+        isPlatform: false,
+      },
+      {
+        tenantId: '00000000-0000-0000-0000-000000000000',
+        tenantName: 'Platform Console',
+        tenantStatus: 'Platform',
+        roles: ['PlatformAdministrator'],
+        assignedLocationIds: [],
+        isPlatform: true,
+      },
+    ];
+    authApiMocks.switchContext.mockResolvedValueOnce(session(['TenantAdministrator'], contexts, 'tenant-1'));
+
+    renderShell('/platform', ['PlatformAdministrator'], contexts, '00000000-0000-0000-0000-000000000000');
+
+    await user.click(await screen.findByRole('button', { name: 'Platform Console' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Administration' }));
+
+    await waitFor(() => expect(authApiMocks.switchContext).toHaveBeenCalledWith('tenant-1'));
+    expect(await screen.findByRole('heading', { name: 'Admin home' })).toBeInTheDocument();
   });
 
   it('lets authorized users switch workspaces from the mobile drawer and returns focus', async () => {

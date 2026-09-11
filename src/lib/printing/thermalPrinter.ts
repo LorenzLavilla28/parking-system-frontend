@@ -10,6 +10,7 @@ const BLE_CHUNK_SIZE = 20;
 const BLE_WRITE_DELAY_MS = 5;
 const SAFE_TEAR_FEED_LINES = 6;
 const SAFE_TEAR_MARGIN_DOTS = 144;
+const RECEIPT_VAT_NOTE = 'Rates apply per vehicle and are inclusive of VAT.';
 
 const BLE_PROFILES = [
   { service: '0000ff00-0000-1000-8000-00805f9b34fb', write: '0000ff02-0000-1000-8000-00805f9b34fb' },
@@ -305,7 +306,26 @@ function asciiSafe(value: string): string {
     .replace(/[\u201C\u201D]/g, '"')
     .replace(/[\u2013\u2014]/g, '-')
     .replace(/\u00A0/g, ' ')
-    .replace(/[^\x20-\x7E]/g, '?');
+    .replace(/[^\x20-\x7E₱]/g, '?');
+}
+
+function formatReceiptMoney(amount: number, currency = 'PHP'): string {
+  const normalizedCurrency = currency.trim().toUpperCase() || 'PHP';
+  const prefix = normalizedCurrency === 'PHP' ? '₱' : normalizedCurrency;
+  return `${prefix} ${amount.toFixed(2)}`;
+}
+
+function nativeRateBreakdown(ticket: EntryTicket): string {
+  const rates = ticket.rateBreakdown ?? [];
+  if (rates.length === 0) return '';
+
+  const lines: string[] = [];
+  for (const rate of rates) {
+    lines.push(...wrapReceiptText(rate.description, 26));
+    lines.push(formatReceiptMoney(rate.amount, ticket.rateCurrency));
+  }
+  lines.push(...wrapReceiptText(RECEIPT_VAT_NOTE, 28));
+  return `${lines.join('\n')}\n`;
 }
 
 function concatBytes(...parts: number[][]): number[] {
@@ -392,7 +412,13 @@ async function browserTicketBytes(ticket: EntryTicket): Promise<number[]> {
   const locationHeight = locationLines.length * lineHeight + 26;
   const detailsHeight = detailLines.length * lineHeight + 50;
   const qrTop = headerHeight + locationHeight + detailsHeight;
-  const ticketCodeTop = qrTop + qrSize + 70;
+  const rates = ticket.rateBreakdown ?? [];
+  const rateRowsHeight = rates.reduce(
+    (height, rate) => height + Math.max(1, wrapReceiptText(rate.description, 26).length) * 24 + 30,
+    0,
+  );
+  const rateSectionHeight = rates.length > 0 ? 48 + rateRowsHeight + 58 : 0;
+  const ticketCodeTop = qrTop + qrSize + 70 + rateSectionHeight;
   // Keep a physical blank margin inside the raster itself. Some PT-210 units
   // ignore ESC d paper-feed commands, so the ticket code must not end at the
   // last printed raster row.
@@ -429,6 +455,33 @@ async function browserTicketBytes(ticket: EntryTicket): Promise<number[]> {
   context.fillRect((width - qrSize) / 2, qrTop, qrSize, qrSize);
   context.drawImage(qrImage, (width - qrSize) / 2, qrTop, qrSize, qrSize);
 
+  if (rates.length > 0) {
+    const rateHeadingY = qrTop + qrSize + 42;
+    context.fillStyle = '#000000';
+    context.textAlign = 'center';
+    context.font = 'bold 20px monospace';
+    context.fillText('FEE BREAKDOWN', width / 2, rateHeadingY);
+
+    let rateY = rateHeadingY + 28;
+    context.font = '16px monospace';
+    for (const rate of rates) {
+      const descriptionLines = wrapReceiptText(rate.description, 26);
+      context.textAlign = 'left';
+      descriptionLines.forEach((line, index) => {
+        context.fillText(asciiSafe(line), padding, rateY + index * 24);
+      });
+      context.textAlign = 'right';
+      context.fillText(formatReceiptMoney(rate.amount, ticket.rateCurrency), width - padding, rateY);
+      rateY += descriptionLines.length * 24 + 30;
+    }
+
+    context.textAlign = 'center';
+    context.font = '15px monospace';
+    wrapReceiptText(RECEIPT_VAT_NOTE, 40).forEach((line, index) => {
+      context.fillText(line, width / 2, rateY + index * 22);
+    });
+  }
+
   context.fillStyle = '#000000';
   context.font = bodyFont;
   context.fillText('TICKET CODE', width / 2, ticketCodeTop - 34);
@@ -461,6 +514,7 @@ async function writeBrowserBytes(characteristic: BrowserBluetoothCharacteristic,
 export async function printEntryTicket(ticket: EntryTicket, locationId?: string | null): Promise<void> {
   if (Capacitor.isNativePlatform()) {
     await ensureNativeThermalPrinterConnected(locationId);
+    const rateBreakdownText = nativeRateBreakdown(ticket);
     await CapacitorThermalPrinter.begin()
       .dpi(200)
       .limitWidth(PT210_PAPER_WIDTH_MM)
@@ -478,6 +532,13 @@ export async function printEntryTicket(ticket: EntryTicket, locationId?: string 
       .align('center')
       .text('\nScan to view or pay\n')
       .qr(ticket.paymentUrl)
+      .align('center')
+      .text(rateBreakdownText ? '\nFEE BREAKDOWN\n' : '')
+      .align('left')
+      .font('B')
+      .text(rateBreakdownText)
+      .align('center')
+      .font('A')
       .text('\nTicket code\n')
       .bold()
       .doubleWidth()

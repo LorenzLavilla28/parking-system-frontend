@@ -19,6 +19,7 @@ import {
   Users,
 } from 'lucide-react';
 import type { Role } from '@/lib/auth/types';
+import type { AuthContext } from '@/lib/auth/types';
 
 export type WorkspaceId = 'administration' | 'gate-operations' | 'platform';
 
@@ -62,6 +63,7 @@ export const workspaces: WorkspaceDefinition[] = [
         label: 'Navigation',
         items: [
           { label: 'Tenants', to: '/platform', icon: Building2, end: true },
+          { label: 'Platform admins', to: '/platform/administrators', icon: Users },
           { label: 'Health', to: '/platform/health', icon: HeartPulse },
         ],
       },
@@ -133,7 +135,10 @@ export function hasWorkspaceAccess(roles: Role[] | undefined, workspace: Workspa
   return roles.some((role) => workspace.requiredRoles.includes(role));
 }
 
-export function getAuthorizedWorkspaces(roles: Role[] | undefined) {
+export function getAuthorizedWorkspaces(roles: Role[] | undefined, contexts?: AuthContext[]) {
+  if (contexts && contexts.length > 0) {
+    return workspaces.filter((workspace) => contexts.some((context) => hasWorkspaceAccess(context.roles, workspace)));
+  }
   return workspaces.filter((workspace) => hasWorkspaceAccess(roles, workspace));
 }
 

@@ -60,6 +60,7 @@ describe('PaymentsPage financial activity', () => {
     expect(screen.getByRole('option', { name: 'All reconciliation states' })).toHaveValue('');
     expect(screen.getByRole('option', { name: 'Provider mismatch' })).toHaveValue('provider-mismatch');
     expect(screen.getByRole('option', { name: 'Cancelled / abandoned' })).toHaveValue('Cancelled');
+    expect(document.querySelector('form.hidden > div.grid')).toHaveClass('xl:grid-cols-3');
   });
 
   it('does not repeat a provider when it matches the payment method', async () => {

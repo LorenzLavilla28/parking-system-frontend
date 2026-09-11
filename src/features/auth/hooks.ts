@@ -42,6 +42,20 @@ export function useLogout() {
   });
 }
 
+export function useSwitchContext() {
+  const setSession = useAuthStore((s) => s.setSession);
+  return useMutation({
+    mutationFn: (tenantId: string) => authApi.switchContext(tenantId),
+    onSuccess: (session) => {
+      setSession(session);
+      // Most tenant queries intentionally do not need to expose the active
+      // tenant in their URL. Clear cached data before the new context renders
+      // so switching tenants can never briefly show another tenant's data.
+      queryClient.clear();
+    },
+  });
+}
+
 export function useForgotPassword() {
   return useMutation({ mutationFn: (email: string) => authApi.forgotPassword(email) });
 }

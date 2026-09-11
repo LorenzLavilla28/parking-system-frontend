@@ -6,6 +6,15 @@ export type Role =
 
 export type TenantStatus = 'Active' | 'Suspended' | 'Archived' | 'Platform';
 
+export interface AuthContext {
+  tenantId: string;
+  tenantName: string;
+  tenantStatus: TenantStatus;
+  roles: Role[];
+  assignedLocationIds: string[];
+  isPlatform: boolean;
+}
+
 export interface AuthUser {
   id: string;
   tenantId: string;
@@ -17,6 +26,8 @@ export interface AuthUser {
   mustChangePassword: boolean;
   /** Returned by the API for lifecycle-aware session UX. */
   tenantStatus?: TenantStatus;
+  /** All active scopes this account may enter; the token represents only one. */
+  availableContexts?: AuthContext[];
 }
 
 export interface AuthSession {

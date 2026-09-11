@@ -22,6 +22,14 @@ export interface EntryTicket {
   corporateBenefitApplied?: boolean;
   corporateBenefitProgramName?: string | null;
   corporateBenefitMessage?: string | null;
+  rateCurrency?: string;
+  rateBreakdown?: EntryRateLine[];
+}
+
+export interface EntryRateLine {
+  code: string;
+  description: string;
+  amount: number;
 }
 
 export interface SessionSummary {

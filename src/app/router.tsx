@@ -38,6 +38,7 @@ const GuardExitPage = lazy(() => import('@/features/guard/GuardExitPage').then((
 const GuardPrinterPage = lazy(() => import('@/features/guard/GuardPrinterPage').then((m) => ({ default: m.GuardPrinterPage })));
 
 const PlatformTenantsPage = lazy(() => import('@/features/platform-admin/PlatformTenantsPage').then((m) => ({ default: m.PlatformTenantsPage })));
+const PlatformAdministratorsPage = lazy(() => import('@/features/platform-admin/PlatformAdministratorsPage').then((m) => ({ default: m.PlatformAdministratorsPage })));
 const PlatformHealthPage = lazy(() => import('@/features/platform-admin/PlatformHealthPage').then((m) => ({ default: m.PlatformHealthPage })));
 
 export const router = createBrowserRouter([
@@ -122,6 +123,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <PlatformTenantsPage /> },
+      { path: 'administrators', element: <PlatformAdministratorsPage /> },
       { path: 'health', element: <PlatformHealthPage /> },
       { path: 'profile', element: <ProfilePage /> },
     ],

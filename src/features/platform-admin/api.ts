@@ -50,12 +50,38 @@ export interface HealthReadiness {
   database: string;
 }
 
+export interface PlatformAdministrator {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+  mustChangePassword: boolean;
+  createdAt: string;
+}
+
+export interface InvitePlatformAdministratorInput {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export interface InvitePlatformAdministratorResponse {
+  administrator: PlatformAdministrator;
+  temporaryPassword: string | null;
+  emailQueued: boolean;
+  existingAccount: boolean;
+}
+
 export const SUBSCRIPTION_PLANS = ['Starter', 'Growth', 'Enterprise', 'Custom'] as const;
 export const TENANT_STATUSES = ['Active', 'Suspended', 'Archived'] as const;
 
 export const platformApi = {
   listTenants: (q?: PageQuery) => api.get<PagedResult<Tenant>>('/api/platform/tenants', { params: q }),
   createTenant: (body: CreateTenantInput) => api.post<Tenant>('/api/platform/tenants', body),
+  listAdministrators: () => api.get<PlatformAdministrator[]>('/api/platform/administrators'),
+  inviteAdministrator: (body: InvitePlatformAdministratorInput) =>
+    api.post<InvitePlatformAdministratorResponse>('/api/platform/administrators', body),
   changeStatus: (id: string, status: string, reason?: string) =>
     api.patch<Tenant>(`/api/platform/tenants/${id}/status`, { status, reason }),
   changePlan: (id: string, subscriptionPlan: string, reason?: string, effectiveDate = 'Immediately') =>

@@ -16,6 +16,27 @@ describe('workspace navigation model', () => {
     expect(getAuthorizedWorkspaces(['PlatformAdministrator']).map((workspace) => workspace.id)).toEqual(['platform']);
   });
 
+  it('derives both workspaces from scoped contexts for a dual-access account', () => {
+    expect(getAuthorizedWorkspaces(undefined, [
+      {
+        tenantId: 'tenant-1',
+        tenantName: 'Acme Parking',
+        tenantStatus: 'Active',
+        roles: ['TenantAdministrator'],
+        assignedLocationIds: [],
+        isPlatform: false,
+      },
+      {
+        tenantId: '00000000-0000-0000-0000-000000000000',
+        tenantName: 'Platform',
+        tenantStatus: 'Platform',
+        roles: ['PlatformAdministrator'],
+        assignedLocationIds: [],
+        isPlatform: true,
+      },
+    ]).map((workspace) => workspace.id)).toEqual(['platform', 'administration', 'gate-operations']);
+  });
+
   it('resolves the active workspace from the route', () => {
     expect(getWorkspaceForPath('/admin/rate-plans/new')?.id).toBe('administration');
     expect(getWorkspaceForPath('/guard/exit')?.id).toBe('gate-operations');
@@ -43,6 +64,13 @@ describe('workspace navigation model', () => {
       'Active sessions',
       'Exit validation',
       'Printer setup',
+    ]);
+
+    const platform = getWorkspaceForPath('/platform')!;
+    expect(getNavigationGroups(platform, ['PlatformAdministrator']).flatMap((group) => group.items.map((item) => item.label))).toEqual([
+      'Tenants',
+      'Platform admins',
+      'Health',
     ]);
   });
 
