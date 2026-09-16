@@ -16,7 +16,7 @@ import {
   TimerReset,
   WalletCards,
 } from 'lucide-react';
-import { adminApi, type RevenuePoint } from './api';
+import { adminApi, listAllPages, type RevenuePoint } from './api';
 import { sessionStatusView } from '@/features/guard/sessionStatus';
 import { Alert } from '@/components/ui/Alert';
 import { Badge } from '@/components/ui/Badge';
@@ -48,7 +48,7 @@ export function ReportsPage() {
 
   const locations = useQuery({
     queryKey: ['admin-locations', 'operations-overview'],
-    queryFn: () => adminApi.listLocations({ pageSize: 200 }),
+    queryFn: () => listAllPages(adminApi.listLocations),
   });
   const report = useQuery({
     queryKey: ['admin-operations-performance', rangeQuery, locationId],

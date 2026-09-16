@@ -1,6 +1,21 @@
 import { api, http } from '@/lib/api/client';
 import type { PagedResult, PageQuery } from '@/lib/api/types';
 
+export async function listAllTenantPages(
+  fetchPage: (query?: PageQuery) => Promise<PagedResult<Tenant>>,
+  query: PageQuery = {},
+): Promise<PagedResult<Tenant>> {
+  const pageSize = 200;
+  const first = await fetchPage({ ...query, page: 1, pageSize });
+  if (first.totalPages <= 1) return first;
+
+  const remaining = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, index) => fetchPage({ ...query, page: index + 2, pageSize })),
+  );
+  const items = [first, ...remaining].flatMap((page) => page.items);
+  return { ...first, items, page: 1, pageSize, totalPages: 1 };
+}
+
 export interface Tenant {
   id: string;
   name: string;

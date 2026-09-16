@@ -11,8 +11,9 @@ vi.mock('./api', async (importOriginal) => {
     ...actual,
     adminApi: {
       ...actual.adminApi,
-      listPayments: vi.fn(),
-      listPaymentOverrides: vi.fn(),
+        listPayments: vi.fn(),
+        getPaymentReport: vi.fn(),
+        listPaymentOverrides: vi.fn(),
       getPayment: vi.fn(),
       exportPayments: vi.fn(),
     },
@@ -20,11 +21,13 @@ vi.mock('./api', async (importOriginal) => {
 });
 
 const listPayments = vi.mocked(adminApi.listPayments);
+const getPaymentReport = vi.mocked(adminApi.getPaymentReport);
 const listPaymentOverrides = vi.mocked(adminApi.listPaymentOverrides);
 
 describe('PaymentsPage financial activity', () => {
   beforeEach(() => {
     listPayments.mockResolvedValue({ items: [], page: 1, pageSize: 25, totalCount: 0, totalPages: 0 });
+    getPaymentReport.mockResolvedValue({ totalCount: 0, successfulCount: 0, collectedAmount: 0, pendingCount: 0, failedCount: 0, overrideCashCount: 0, overrideCashAmount: 0, currency: 'PHP' });
     listPaymentOverrides.mockResolvedValue([{
       id: 'override-1',
       parkingSessionId: 'session-1',
@@ -115,6 +118,31 @@ describe('PaymentsPage financial activity', () => {
     expect(screen.getByText('₱20.00')).toBeInTheDocument();
     expect(screen.getByText('Overstay')).toBeInTheDocument();
     expect(screen.getAllByText('Needs review').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('uses report aggregates instead of the visible payment page', async () => {
+    getPaymentReport.mockResolvedValue({
+      totalCount: 42,
+      successfulCount: 12,
+      collectedAmount: 1500,
+      pendingCount: 4,
+      failedCount: 3,
+      overrideCashCount: 2,
+      overrideCashAmount: 180,
+      currency: 'PHP',
+    });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><PaymentsPage /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('₱1,500.00')).toBeInTheDocument();
+    expect(screen.getByText('12 successful · All dates')).toBeInTheDocument();
+    expect(screen.getByText('42 payments matching these filters')).toBeInTheDocument();
+    expect(getPaymentReport).toHaveBeenCalledWith(expect.not.objectContaining({ page: expect.anything(), pageSize: expect.anything() }));
   });
 
   it('allows the date picker to close without selecting or clearing a range', async () => {

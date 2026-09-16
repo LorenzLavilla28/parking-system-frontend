@@ -19,7 +19,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import { adminApi, type CorporateBenefitInput, type CorporateBenefitProgram, type CorporateBenefitRules } from './api';
+import { adminApi, listAllPages, type CorporateBenefitInput, type CorporateBenefitProgram, type CorporateBenefitRules } from './api';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { FormField } from '@/components/ui/FormField';
@@ -217,7 +217,7 @@ function summarizeDays(days: string[]) {
 }
 
 function BenefitModal({ program, onClose, onSaved, onPersisted }: { program: CorporateBenefitProgram | null; onClose: () => void; onSaved: () => void; onPersisted: () => void }) {
-  const locations = useQuery({ queryKey: ['admin-locations', 'benefits'], queryFn: () => adminApi.listLocations({ pageSize: 200 }) });
+  const locations = useQuery({ queryKey: ['admin-locations', 'benefits'], queryFn: () => listAllPages(adminApi.listLocations) });
   const isNew = !program;
   const [stage, setStage] = useState(0);
   const [dirty, setDirty] = useState(false);

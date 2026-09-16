@@ -19,7 +19,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import { platformApi, type CreateTenantInput, type Tenant, type TenantAuditLog, SUBSCRIPTION_PLANS, TENANT_STATUSES } from './api';
+import { listAllTenantPages, platformApi, type CreateTenantInput, type Tenant, type TenantAuditLog, SUBSCRIPTION_PLANS, TENANT_STATUSES } from './api';
 import { slugify } from '@/lib/slug';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -71,7 +71,7 @@ export function LegacyPlatformTenantsPage() {
   const [creating, setCreating] = useState(false);
   const [capacityTenant, setCapacityTenant] = useState<Tenant | null>(null);
 
-  const tenants = useQuery({ queryKey: ['platform-tenants'], queryFn: () => platformApi.listTenants() });
+  const tenants = useQuery({ queryKey: ['platform-tenants'], queryFn: () => listAllTenantPages(platformApi.listTenants) });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
   const changeStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => platformApi.changeStatus(id, status),
@@ -806,7 +806,7 @@ export function PlatformTenantsPage() {
 
   const tenants = useQuery({
     queryKey: ['platform-tenants', search],
-    queryFn: () => platformApi.listTenants({ pageSize: 100, search: search.trim() || undefined }),
+    queryFn: () => listAllTenantPages(platformApi.listTenants, { search: search.trim() || undefined }),
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
   const allTenants = tenants.data?.items ?? [];
@@ -921,7 +921,7 @@ function CapacityAddonReviewModal({ tenant, onClose, onSaved }: { tenant: Tenant
   const purchasedCapacity = tenant.purchasedSlotCapacityPerLocation ?? tenant.maximumSlotsPerLocation;
   const effectiveCapacity = purchasedCapacity == null ? null : purchasedCapacity + additionalCapacity;
   const nextPrice = capacityPriceV2(tenant.subscriptionPlan, effectiveCapacity);
-  return <Modal open onClose={onClose} title={`Manage capacity for ${tenant.name}`} size="md"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) save.mutate(); }}><Alert tone="info">Capacity applies to each location and changes the calculated monthly price. It does not create a new location.</Alert><div className="grid gap-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Current price" value={formatPrice(tenant.monthlyPrice)} /><ReviewItem label="Purchased capacity" value={purchasedCapacity == null ? 'Platform-managed' : `${purchasedCapacity} slots/location`} /><ReviewItem label="Current add-on" value={`+${tenant.additionalSlotCapacity} slots/location`} /></div><FormField label="Additional capacity (slots per location)" htmlFor="addon-capacity-v2"><Input id="addon-capacity-v2" type="number" min={0} value={additionalCapacity} onChange={(event) => setAdditionalCapacity(Math.max(0, Number(event.target.value)))} required /><p className="text-sm text-slate-500">Set to 0 to remove the add-on.</p></FormField><div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900"><p><span className="font-semibold">Effective capacity: </span>{effectiveCapacity == null ? 'Managed by custom plan' : `${effectiveCapacity} slots per location`}</p><p className="mt-1"><span className="font-semibold">New monthly price: </span>{formatPrice(nextPrice)}</p></div><FormField label="Reason for change" htmlFor="capacity-reason-v2"><Textarea id="capacity-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!reason.trim()} loading={save.isPending}>Save capacity</Button></div></form></Modal>;
+  return <Modal open onClose={onClose} title={`Manage capacity for ${tenant.name}`} size="md"><form className="space-y-5" onSubmit={(event) => { event.preventDefault(); if (reason.trim()) save.mutate(); }}><Alert tone="info">Capacity applies to each location, updates existing location capacities, and changes the calculated monthly price. It does not create a new location.</Alert><div className="grid gap-3 rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200 sm:grid-cols-2"><ReviewItem label="Current plan" value={tenant.subscriptionPlan} /><ReviewItem label="Current price" value={formatPrice(tenant.monthlyPrice)} /><ReviewItem label="Purchased capacity" value={purchasedCapacity == null ? 'Platform-managed' : `${purchasedCapacity} slots/location`} /><ReviewItem label="Current add-on" value={`+${tenant.additionalSlotCapacity} slots/location`} /></div><FormField label="Additional capacity (slots per location)" htmlFor="addon-capacity-v2"><Input id="addon-capacity-v2" type="number" min={0} value={additionalCapacity} onChange={(event) => setAdditionalCapacity(Math.max(0, Number(event.target.value)))} required /><p className="text-sm text-slate-500">Set to 0 to remove the add-on.</p></FormField><div className="rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-900"><p><span className="font-semibold">Effective capacity: </span>{effectiveCapacity == null ? 'Managed by custom plan' : `${effectiveCapacity} slots per location`}</p><p className="mt-1"><span className="font-semibold">New monthly price: </span>{formatPrice(nextPrice)}</p></div><FormField label="Reason for change" htmlFor="capacity-reason-v2"><Textarea id="capacity-reason-v2" rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Record why this change was approved" required /></FormField>{save.isError && <ErrorState error={save.error} />}<div className="flex justify-end gap-2 border-t border-slate-100 pt-4"><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!reason.trim()} loading={save.isPending}>Save capacity</Button></div></form></Modal>;
 }
 
 function AuditHistoryModalV2({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {

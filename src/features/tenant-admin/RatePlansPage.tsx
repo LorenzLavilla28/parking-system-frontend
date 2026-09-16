@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, CalendarClock, History, MapPin, MoreHorizontal, Pencil, Plus } from 'lucide-react';
-import { adminApi, type RatePlan } from './api';
+import { adminApi, listAllPages, type RatePlan } from './api';
 import { describeRateRules, parseRateRulesJson } from './pricingRules';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -17,8 +17,8 @@ export function RatePlansPage() {
   const [historyOf, setHistoryOf] = useState<RatePlan | null>(null);
   const [detailsOf, setDetailsOf] = useState<RatePlan | null>(null);
 
-  const plans = useQuery({ queryKey: ['admin-rate-plans'], queryFn: () => adminApi.listRatePlans() });
-  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations() });
+  const plans = useQuery({ queryKey: ['admin-rate-plans'], queryFn: () => listAllPages((query) => adminApi.listRatePlans(undefined, query)) });
+  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => listAllPages(adminApi.listLocations) });
   const locationItems = locations.data?.items ?? [];
   const assignedLocationCount = (planId: string) =>
     locationItems.filter((location) => location.activeRatePlanId === planId && location.status === 'Active').length;

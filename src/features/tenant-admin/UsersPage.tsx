@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, CircleAlert, Copy, Eye, EyeOff, MapPinned, Pencil, Plus, RefreshCw, ShieldCheck, UserRoundCheck, Users } from 'lucide-react';
-import { adminApi, type User } from './api';
+import { adminApi, listAllPages, type User } from './api';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -23,7 +23,7 @@ export function UsersPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<User | 'new' | null>(null);
 
-  const users = useQuery({ queryKey: ['admin-users'], queryFn: () => adminApi.listUsers() });
+  const users = useQuery({ queryKey: ['admin-users'], queryFn: () => listAllPages(adminApi.listUsers) });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['admin-users'] });
   const activeCount = users.data?.items.filter((user) => user.status === 'Active').length ?? 0;
   const guardCount = users.data?.items.filter((user) => user.roles.includes('Guard')).length ?? 0;
@@ -141,7 +141,7 @@ function PasswordCheck({ valid, label }: { valid: boolean; label: string }) {
 
 function UserModal({ user, onClose, onSaved }: { user: User | null; onClose: () => void; onSaved: () => void }) {
   const isNew = !user;
-  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations() });
+  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => listAllPages(adminApi.listLocations) });
 
   const [firstName, setFirstName] = useState(user?.firstName ?? '');
   const [lastName, setLastName] = useState(user?.lastName ?? '');

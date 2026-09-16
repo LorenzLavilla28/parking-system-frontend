@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CarFront, CircleDollarSign, QrCode, Search, ToggleRight } from 'lucide-react';
-import { adminApi } from './api';
+import { adminApi, listAllPages } from './api';
 import { useSessionRealtime } from '@/lib/realtime/useSessionRealtime';
 import { LiveIndicator } from '@/components/ui/LiveIndicator';
 import { Input } from '@/components/ui/Input';
@@ -28,7 +28,7 @@ export function AdminSessionsPage() {
   const [page, setPage] = useState(1);
   const [qrSessionId, setQrSessionId] = useState<string | null>(null);
   const locationId = params.get('locationId') ?? '';
-  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations() });
+  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => listAllPages(adminApi.listLocations) });
 
   const sessions = useQuery({
     queryKey: ['admin-sessions', submitted, activeOnly, locationId, attention, page],

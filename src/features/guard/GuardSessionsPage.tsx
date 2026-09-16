@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ClipboardCheck, QrCode, Search, X } from 'lucide-react';
-import { guardApi, type SessionSummary } from './api';
+import { guardApi, listAllSessionPages, type SessionSummary } from './api';
 import { useGuardLocations } from './useGuardLocations';
 import { sessionStatusView } from './sessionStatus';
 import { useSessionRealtime } from '@/lib/realtime/useSessionRealtime';
@@ -34,14 +34,10 @@ export function GuardSessionsPage() {
   const sessions = useQuery({
     queryKey: ['guard-sessions', selectedId, submitted],
     queryFn: () =>
-      guardApi.searchSessions({
+      listAllSessionPages(guardApi.searchSessions, {
         locationId: selectedId ?? undefined,
         plate: submitted || undefined,
         activeOnly: true,
-        // Keep filter counts and client-side status filtering consistent, then
-        // paginate the guard's sorted view at 10 records per page.
-        page: 1,
-        pageSize: 200,
       }),
     enabled: !!selectedId,
   });

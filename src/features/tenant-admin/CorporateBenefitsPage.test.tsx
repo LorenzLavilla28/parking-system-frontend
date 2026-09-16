@@ -5,15 +5,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { CorporateBenefitsPage } from './CorporateBenefitsPage';
 import { adminApi, type CorporateBenefitProgram } from './api';
 
-vi.mock('./api', () => ({
-  adminApi: {
-    listCorporateBenefits: vi.fn(),
-    listLocations: vi.fn(),
-    createCorporateBenefit: vi.fn(),
-    updateCorporateBenefit: vi.fn(),
-    setCorporateBenefitStatus: vi.fn(),
-  },
-}));
+vi.mock('./api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api')>();
+  return {
+    ...actual,
+    adminApi: {
+      ...actual.adminApi,
+      listCorporateBenefits: vi.fn(),
+      listLocations: vi.fn(),
+      createCorporateBenefit: vi.fn(),
+      updateCorporateBenefit: vi.fn(),
+      setCorporateBenefitStatus: vi.fn(),
+    },
+  };
+});
 
 const listCorporateBenefits = vi.mocked(adminApi.listCorporateBenefits);
 const listLocations = vi.mocked(adminApi.listLocations);

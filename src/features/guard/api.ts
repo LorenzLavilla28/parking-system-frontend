@@ -51,6 +51,35 @@ export interface SessionSummary {
   corporateBenefitApplied?: boolean;
 }
 
+export interface SessionSearchParams {
+  plate?: string;
+  locationId?: string;
+  activeOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export type SessionSearchResult = PagedResult<SessionSummary> & {
+  attentionCount?: number;
+  unpaidCount?: number;
+  longRunningCount?: number;
+};
+
+export async function listAllSessionPages(
+  fetchPage: (params: SessionSearchParams) => Promise<SessionSearchResult>,
+  params: Omit<SessionSearchParams, 'page' | 'pageSize'> = {},
+): Promise<SessionSearchResult> {
+  const pageSize = 200;
+  const first = await fetchPage({ ...params, page: 1, pageSize });
+  if (first.totalPages <= 1) return first;
+
+  const remaining = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, index) => fetchPage({ ...params, page: index + 2, pageSize })),
+  );
+  const items = [first, ...remaining].flatMap((page) => page.items);
+  return { ...first, items, page: 1, pageSize, totalPages: 1 };
+}
+
 export interface SessionQr {
   sessionId: string;
   ticketCode: string;
@@ -134,8 +163,8 @@ export const guardApi = {
   recordEntry: (body: RecordEntryInput) => api.post<EntryTicket>('/api/guard/entries', body),
   corporateBenefits: (locationId: string, vehicleType: string) =>
     api.get<GuardCorporateBenefitOption[]>('/api/guard/entries/corporate-benefits', { params: { locationId, vehicleType } }),
-  searchSessions: (params: { plate?: string; locationId?: string; activeOnly?: boolean; page?: number; pageSize?: number }) =>
-    api.get<PagedResult<SessionSummary>>('/api/guard/sessions', { params }),
+  searchSessions: (params: SessionSearchParams) =>
+    api.get<SessionSearchResult>('/api/guard/sessions', { params }),
   getSession: (id: string) => api.get<SessionSummary>(`/api/guard/sessions/${id}`),
   getQr: (id: string) => api.post<SessionQr>(`/api/guard/sessions/${id}/qr`),
   exitStatus: (sessionId: string) => api.get<ExitStatus>(`/api/guard/exits/${sessionId}`),

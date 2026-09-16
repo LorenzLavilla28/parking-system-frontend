@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, Banknote, CheckCircle2, Info, MapPin, Pencil, Plus, RotateCcw, Search, TimerReset } from 'lucide-react';
-import { adminApi, type Location, type LocationInput, type LocationQuota, type RatePlan } from './api';
+import { adminApi, listAllPages, type Location, type LocationInput, type LocationQuota, type RatePlan } from './api';
 import { slugify } from '@/lib/slug';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -29,9 +29,9 @@ export function LocationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
 
-  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => adminApi.listLocations({ pageSize: 200 }) });
+  const locations = useQuery({ queryKey: ['admin-locations'], queryFn: () => listAllPages(adminApi.listLocations) });
   const locationQuota = useQuery({ queryKey: ['admin-location-quota'], queryFn: adminApi.getLocationQuota });
-  const ratePlans = useQuery({ queryKey: ['admin-rate-plans', 'locations-page'], queryFn: () => adminApi.listRatePlans(undefined, { pageSize: 200 }) });
+  const ratePlans = useQuery({ queryKey: ['admin-rate-plans', 'locations-page'], queryFn: () => listAllPages((query) => adminApi.listRatePlans(undefined, query)) });
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-locations'] });

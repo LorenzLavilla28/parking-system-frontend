@@ -3,6 +3,20 @@ import type { PagedResult, PageQuery } from '@/lib/api/types';
 import type { SessionSummary } from '@/features/guard/api';
 import { http } from '@/lib/api/client';
 
+export async function listAllPages<T>(
+  fetchPage: (query: PageQuery) => Promise<PagedResult<T>>,
+): Promise<PagedResult<T>> {
+  const pageSize = 200;
+  const first = await fetchPage({ page: 1, pageSize });
+  if (first.totalPages <= 1) return first;
+
+  const remaining = await Promise.all(
+    Array.from({ length: first.totalPages - 1 }, (_, index) => fetchPage({ page: index + 2, pageSize })),
+  );
+  const items = [first, ...remaining].flatMap((page) => page.items);
+  return { ...first, items, page: 1, pageSize, totalPages: 1 };
+}
+
 // ---- Locations -------------------------------------------------------------
 export interface Location {
   id: string;
@@ -191,11 +205,23 @@ export interface PaymentQuery {
   sessionId?: string;
   from?: string;
   to?: string;
+  reconciliation?: string;
   overrideOnly?: boolean;
   sortBy?: 'time' | 'amount';
   sortDirection?: 'asc' | 'desc';
   page?: number;
   pageSize?: number;
+}
+
+export interface PaymentReport {
+  totalCount: number;
+  successfulCount: number;
+  collectedAmount: number;
+  pendingCount: number;
+  failedCount: number;
+  overrideCashCount: number;
+  overrideCashAmount: number;
+  currency: string;
 }
 
 export interface PaymentSummary {
@@ -448,6 +474,8 @@ export const adminApi = {
 
   listPayments: (params: PaymentQuery) =>
     api.get<PagedResult<PaymentSummary>>('/api/tenant/payments', { params }),
+  getPaymentReport: (params: Omit<PaymentQuery, 'page' | 'pageSize'>) =>
+    api.get<PaymentReport>('/api/tenant/payments/report', { params }),
   listPaymentOverrides: (params?: { locationId?: string; from?: string; to?: string; pageSize?: number }) =>
     api.get<PaymentOverride[]>('/api/tenant/payments/overrides', { params }),
   getPayment: (id: string) => api.get<PaymentDetail>(`/api/tenant/payments/${id}`),

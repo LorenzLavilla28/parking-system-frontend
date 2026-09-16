@@ -49,6 +49,7 @@ export function PaymentsPage() {
     sessionId: params.get('sessionId') || undefined,
     from: params.get('from') ? `${params.get('from')}T00:00:00Z` : undefined,
     to: params.get('to') ? `${params.get('to')}T23:59:59.999Z` : undefined,
+    reconciliation: params.get('reconciliation') || undefined,
     overrideOnly: params.get('overrideOnly') === 'true' ? true : undefined,
     sortBy: (params.get('sortBy') as PaymentQuery['sortBy']) || undefined,
     sortDirection: (params.get('sortDirection') as PaymentQuery['sortDirection']) || undefined,
@@ -59,6 +60,21 @@ export function PaymentsPage() {
   const payments = useQuery({
     queryKey: ['admin-payments', query],
     queryFn: () => adminApi.listPayments(query),
+  });
+  const reportQuery = useMemo(() => ({
+    search: query.search,
+    status: query.status,
+    provider: query.provider,
+    paymentMethod: query.paymentMethod,
+    sessionId: query.sessionId,
+    from: query.from,
+    to: query.to,
+    reconciliation: query.reconciliation,
+    overrideOnly: query.overrideOnly,
+  }), [query]);
+  const paymentReport = useQuery({
+    queryKey: ['admin-payment-report', reportQuery],
+    queryFn: () => adminApi.getPaymentReport(reportQuery),
   });
   const overrides = useQuery({
     queryKey: ['admin-payment-overrides', query.from, query.to],
@@ -71,13 +87,7 @@ export function PaymentsPage() {
   });
 
   const allRows = payments.data?.items ?? [];
-  const rows = reconciliation ? allRows.filter((row) => reconciliationView(row).key === reconciliation) : allRows;
-  const paid = rows.filter((row) => row.status === 'Paid');
-  const pending = rows.filter((row) => ['Pending', 'Processing'].includes(row.status));
-  const failed = rows.filter((row) => ['Failed', 'Expired'].includes(row.status));
-  const totalPaid = paid.reduce((sum, row) => sum + row.amount, 0);
-  const overridePaid = paid.filter((row) => row.isOverrideRelated);
-  const overrideCash = overridePaid.reduce((sum, row) => sum + row.amount, 0);
+  const rows = allRows;
   const periodLabel = paymentPeriodLabel(params.get('from'), params.get('to'));
   const activeFilters = getActiveFilters(params);
   const hasAppliedFilters = activeFilters.length > 0 || Boolean(params.get('sessionId'));
@@ -221,11 +231,11 @@ export function PaymentsPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={CircleDollarSign} label="Collected in results" value={formatMoney(totalPaid)} detail={`${paid.length} successful · ${periodLabel}`} tone="green" />
-        <MetricCard icon={ShieldCheck} label="Successful payments" value={paid.length} detail="Confirmed transactions" tone="green" />
-        <MetricCard icon={CalendarRange} label="Pending payment attempts" value={pending.length} detail="Awaiting provider confirmation" tone="amber" />
-        <MetricCard icon={ShieldCheck} label="Failed payments" value={failed.length} detail="Failed or expired attempts" tone="slate" />
-        <MetricCard icon={CircleDollarSign} label="Override cash collected" value={formatMoney(overrideCash)} detail={`${overridePaid.length} payment${overridePaid.length === 1 ? '' : 's'} on this page`} tone="blue" />
+        <MetricCard icon={CircleDollarSign} label="Collected in results" value={formatMoney(paymentReport.data?.collectedAmount ?? 0, paymentReport.data?.currency)} detail={`${paymentReport.data?.successfulCount ?? 0} successful · ${periodLabel}`} tone="green" />
+        <MetricCard icon={ShieldCheck} label="Successful payments" value={paymentReport.data?.successfulCount ?? 0} detail="Confirmed transactions" tone="green" />
+        <MetricCard icon={CalendarRange} label="Pending payment attempts" value={paymentReport.data?.pendingCount ?? 0} detail="Awaiting provider confirmation" tone="amber" />
+        <MetricCard icon={ShieldCheck} label="Failed payments" value={paymentReport.data?.failedCount ?? 0} detail="Failed or expired attempts" tone="slate" />
+        <MetricCard icon={CircleDollarSign} label="Override cash collected" value={formatMoney(paymentReport.data?.overrideCashAmount ?? 0, paymentReport.data?.currency)} detail={`${paymentReport.data?.overrideCashCount ?? 0} payment${(paymentReport.data?.overrideCashCount ?? 0) === 1 ? '' : 's'} in all results`} tone="blue" />
       </div>
 
       <Card className="p-4">
@@ -259,7 +269,8 @@ export function PaymentsPage() {
 
       {payments.isLoading && <LoadingState label="Loading payments..." />}
       {payments.isError && <ErrorState error={payments.error} />}
-      {payments.data && <p className="text-sm font-semibold text-slate-700">{(reconciliation ? rows.length : payments.data.totalCount).toLocaleString()} payment{(reconciliation ? rows.length : payments.data.totalCount) === 1 ? '' : 's'}{reconciliation ? ' on this page' : ''}</p>}
+      {paymentReport.isError && <ErrorState error={paymentReport.error} />}
+      {paymentReport.data && <p className="text-sm font-semibold text-slate-700">{paymentReport.data.totalCount.toLocaleString()} payment{paymentReport.data.totalCount === 1 ? '' : 's'} matching these filters</p>}
       {payments.data && rows.length === 0 && <EmptyState><div className="space-y-3"><p>No payment records match these filters.</p><Button variant="secondary" disabled={!hasAppliedFilters} onClick={clearFilters}>Clear filters</Button></div></EmptyState>}
       {rows.length > 0 && <div className="md:hidden"><div className="space-y-3">{rows.map((row) => <MobilePaymentCard key={row.id} row={row} onSelect={() => {
         const next = new URLSearchParams(params);

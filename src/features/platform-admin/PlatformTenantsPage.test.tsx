@@ -6,18 +6,23 @@ import { PlatformTenantsPage } from './PlatformTenantsPage';
 import { platformApi, type Tenant } from './api';
 import type { PagedResult } from '@/lib/api/types';
 
-vi.mock('./api', () => ({
-  SUBSCRIPTION_PLANS: ['Free', 'Starter', 'Growth', 'Enterprise'],
-  TENANT_STATUSES: ['Active', 'Suspended', 'Archived'],
-  platformApi: {
-    listTenants: vi.fn(),
-    createTenant: vi.fn(),
-    changeStatus: vi.fn(),
-    changePlan: vi.fn(),
-    updateCapacityAddon: vi.fn(),
-    getAuditHistory: vi.fn(),
-  },
-}));
+vi.mock('./api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./api')>();
+  return {
+    ...actual,
+    SUBSCRIPTION_PLANS: ['Free', 'Starter', 'Growth', 'Enterprise'],
+    TENANT_STATUSES: ['Active', 'Suspended', 'Archived'],
+    platformApi: {
+      ...actual.platformApi,
+      listTenants: vi.fn(),
+      createTenant: vi.fn(),
+      changeStatus: vi.fn(),
+      changePlan: vi.fn(),
+      updateCapacityAddon: vi.fn(),
+      getAuditHistory: vi.fn(),
+    },
+  };
+});
 
 const listTenants = vi.mocked(platformApi.listTenants);
 const createTenant = vi.mocked(platformApi.createTenant);
